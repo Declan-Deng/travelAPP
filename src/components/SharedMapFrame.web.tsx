@@ -98,7 +98,7 @@ export default function SharedMapFrame({
   return (
     <iframe
       ref={iframeRef}
-      title="泉州地图"
+      title="香港地图"
       srcDoc={html}
       onLoad={() => {
         syncSelectedSpot(selectedSpotId);

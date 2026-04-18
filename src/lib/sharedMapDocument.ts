@@ -53,12 +53,12 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
         display: none;
       }
 
-      .quanzhou-marker-shell {
+      .hongkong-marker-shell {
         background: transparent;
         border: 0;
       }
 
-      .quanzhou-route-marker {
+      .hongkong-route-marker {
         width: 26px;
         height: 26px;
         border-radius: 999px;
@@ -74,7 +74,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
         transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease, border-color 160ms ease;
       }
 
-      .quanzhou-extra-marker {
+      .hongkong-extra-marker {
         width: 12px;
         height: 12px;
         border-radius: 999px;
@@ -84,7 +84,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
         transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease, border-color 160ms ease;
       }
 
-      .quanzhou-city-marker {
+      .hongkong-city-marker {
         width: 10px;
         height: 10px;
         border-radius: 999px;
@@ -94,7 +94,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
         transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease, border-color 160ms ease;
       }
 
-      .quanzhou-user-marker {
+      .hongkong-user-marker {
         width: 14px;
         height: 14px;
         border-radius: 999px;
@@ -103,44 +103,44 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
       }
 
-      .quanzhou-route-marker.is-active,
-      .quanzhou-extra-marker.is-active,
-      .quanzhou-city-marker.is-active {
+      .hongkong-route-marker.is-active,
+      .hongkong-extra-marker.is-active,
+      .hongkong-city-marker.is-active {
         transform: scale(1.14);
         box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.14), 0 10px 24px rgba(0, 0, 0, 0.28);
       }
 
-      .quanzhou-route-marker.is-active {
+      .hongkong-route-marker.is-active {
         border-color: #fff8ef;
       }
 
-      .quanzhou-extra-marker.is-active {
+      .hongkong-extra-marker.is-active {
         border-color: #f2fff8;
       }
 
-      .quanzhou-city-marker.is-active {
+      .hongkong-city-marker.is-active {
         border-color: #fffcef;
       }
 
-      .quanzhou-route-marker.is-dim,
-      .quanzhou-extra-marker.is-dim,
-      .quanzhou-city-marker.is-dim {
+      .hongkong-route-marker.is-dim,
+      .hongkong-extra-marker.is-dim,
+      .hongkong-city-marker.is-dim {
         opacity: 0.42;
       }
 
       @media (max-width: 640px) {
-        .quanzhou-route-marker {
+        .hongkong-route-marker {
           width: 22px;
           height: 22px;
           font-size: 9px;
         }
 
-        .quanzhou-extra-marker {
+        .hongkong-extra-marker {
           width: 9px;
           height: 9px;
         }
 
-        .quanzhou-city-marker {
+        .hongkong-city-marker {
           width: 7px;
           height: 7px;
         }
@@ -166,7 +166,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
       const map = L.map("map", {
         zoomControl: false,
         attributionControl: true,
-      }).setView(data.routeCoords[0] || [24.9149599, 118.5880777], 13);
+      }).setView(data.routeCoords[0] || [22.28194, 114.15806], 13);
       let userMarker = null;
 
       const tileLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
@@ -179,7 +179,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
 
       function makeDivIcon(html, size, anchor) {
         return L.divIcon({
-          className: "quanzhou-marker-shell",
+          className: "hongkong-marker-shell",
           html,
           iconSize: size,
           iconAnchor: anchor,
@@ -257,7 +257,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
 
       data.routeSpots.forEach((spot, index) => {
         const marker = L.marker(spot.coords, {
-          icon: makeDivIcon('<div class="quanzhou-route-marker">' + (index + 1) + '</div>', [28, 28], [14, 14]),
+          icon: makeDivIcon('<div class="hongkong-route-marker">' + (index + 1) + '</div>', [28, 28], [14, 14]),
         })
           .addTo(map)
           .on("click", () => {
@@ -270,7 +270,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
 
       data.extraSpots.forEach((spot) => {
         const marker = L.marker(spot.coords, {
-          icon: makeDivIcon('<div class="quanzhou-extra-marker"></div>', [14, 14], [7, 7]),
+          icon: makeDivIcon('<div class="hongkong-extra-marker"></div>', [14, 14], [7, 7]),
         })
           .addTo(map)
           .on("click", () => {
@@ -283,7 +283,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
 
       data.citySpots.forEach((spot) => {
         const marker = L.marker(spot.coords, {
-          icon: makeDivIcon('<div class="quanzhou-city-marker"></div>', [12, 12], [6, 6]),
+          icon: makeDivIcon('<div class="hongkong-city-marker"></div>', [12, 12], [6, 6]),
         })
           .addTo(map)
           .on("click", () => {
@@ -296,7 +296,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
 
       if (data.userLocation) {
         userMarker = L.marker(data.userLocation, {
-          icon: makeDivIcon('<div class="quanzhou-user-marker"></div>', [14, 14], [7, 7]),
+          icon: makeDivIcon('<div class="hongkong-user-marker"></div>', [14, 14], [7, 7]),
         }).addTo(map);
       }
 

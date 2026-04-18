@@ -1,0 +1,314 @@
+[
+  {
+    "name": "旺角",
+    "english_name": "Mong Kok",
+    "address": "Mong Kok, Kowloon, Hong Kong",
+    "lat": 22.3225,
+    "lon": 114.17056,
+    "description": "九龙最典型的高密度商业区之一，街头招牌、主题街市与高人流共同构成强烈的“老香港电影感”。这里热闹、霓虹感和街头感突出，零售、餐饮和街边小店高度集中，适合夜间逛街和拍摄港风街景。"
+  },
+  {
+    "name": "油麻地",
+    "english_name": "Yau Ma Tei",
+    "address": "Yau Ma Tei, Kowloon, Hong Kong",
+    "lat": 22.31014,
+    "lon": 114.17091,
+    "description": "兼具老社区、夜市与交通中轴功能，是串联庙街、油麻地警署、果栏与弥敦道的重要中段。整体氛围比尖沙咀更本地，更有旧香港质感，居住、零售与夜间市场活动混合。"
+  },
+  {
+    "name": "尖沙咀",
+    "english_name": "Tsim Sha Tsui",
+    "address": "Tsim Sha Tsui, Kowloon, Hong Kong",
+    "lat": 22.29398,
+    "lon": 114.17122,
+    "description": "维港南岸成熟的旅游与商业区，海滨、酒店、购物和交通节点密度极高。它在行程中承担“海景 + 地标 + 商圈”的复合功能，可连接星光大道、海港城、半岛酒店、重庆大厦与天星小轮。"
+  },
+  {
+    "name": "中环",
+    "english_name": "Central",
+    "address": "Central, Hong Kong Island, Hong Kong",
+    "lat": 22.28194,
+    "lon": 114.15806,
+    "description": "港岛核心商务与城市地标区，也是多条路线的枢纽。中环至半山自动扶手电梯、大馆、艺穗会、中环街市、香港摩天轮等点位环绕，既适合作为转场中心，也适合步行串联。"
+  },
+  {
+    "name": "太平山顶",
+    "english_name": "Victoria Peak / The Peak",
+    "address": "The Peak, Hong Kong Island, Hong Kong",
+    "lat": 22.27547,
+    "lon": 114.14383,
+    "description": "观赏维港天际线最经典的高位视角之一。白天可看城市层次，傍晚和夜间能俯瞰灯海，视野开阔，可饱览港岛、维港与离岛方向景观。"
+  },
+  {
+    "name": "铜锣湾",
+    "english_name": "Causeway Bay",
+    "address": "Causeway Bay, Hong Kong Island, Hong Kong",
+    "lat": 22.28066,
+    "lon": 114.18096,
+    "description": "港岛高密度购物、餐饮片区，城市节奏鲜明，适合作为晚间收尾的商业区。相比中环，它更偏向消费、商场、餐饮和街头活力，而不是历史建筑与坡地步行体验。"
+  },
+  {
+    "name": "星光大道",
+    "english_name": "Avenue of Stars",
+    "address": "Avenue of Stars, Tsim Sha Tsui Promenade, Kowloon, Hong Kong",
+    "lat": 22.2931,
+    "lon": 114.175,
+    "description": "尖沙咀海滨结合香港电影文化与维港景观的地标，步行强度低、景观体验佳。适合黄昏游览，以开阔海滨视野、李小龙铜像、明星手印和香港电影符号为特色。"
+  },
+  {
+    "name": "天星小轮",
+    "english_name": "Star Ferry",
+    "address": "Central Pier 7 / Tsim Sha Tsui Star Ferry Pier, Hong Kong",
+    "lat": 22.2872,
+    "lon": 114.161,
+    "description": "天星小轮不仅是过海交通工具，也是低门槛、高性价比的经典观景体验。它连接中环与尖沙咀海滨，是体验维港水面视角的优质方式。"
+  },
+  {
+    "name": "中环至半山自动扶手电梯",
+    "english_name": "Central–Mid-Levels Escalator and Walkway System",
+    "address": "Central–Mid-Levels Escalator and Walkway System, Central, Hong Kong",
+    "lat": 22.28101,
+    "lon": 114.15251,
+    "description": "中环代表性城市交通景观，能直观展现坡地城市的层次感。它既是特色目的地，也是连接 Soho、大馆、荷李活道及街巷咖啡店的动线骨架。"
+  },
+  {
+    "name": "中环7号码头",
+    "english_name": "Central Pier No. 7",
+    "address": "Central Ferry Piers, Man Yiu Street, Central, Hong Kong",
+    "lat": 22.2872,
+    "lon": 114.161,
+    "description": "中环天星码头核心点位之一，核心价值在于维港横渡体验与海边步行氛围。与香港摩天轮、中环海滨、香港大会堂一带串联，游览效率更高。"
+  },
+  {
+    "name": "大潭水塘道休憩处",
+    "english_name": "Tai Tam Reservoir Road Sitting-out Area",
+    "address": "Tai Tam Reservoir Road, Hong Kong Island, Hong Kong",
+    "lat": null,
+    "lon": null,
+    "description": "连接远足路线的休憩点，以藤本与花荫形成的微型生态景观为特色。它不是大型景点设施，更适合作为南区自然线中的短暂停留点。"
+  },
+  {
+    "name": "龟背湾泳滩",
+    "english_name": "Turtle Cove Beach",
+    "address": "Turtle Cove Beach, Tai Tam, Hong Kong Island, Hong Kong",
+    "lat": 22.23303,
+    "lon": 114.22319,
+    "description": "气质安静，偏向本地人休闲的海滩。适合避开浅水湾、赤柱等主流海滩人流进行短暂停留，是南区沿线的自然补充点位。"
+  },
+  {
+    "name": "赤柱",
+    "english_name": "Stanley",
+    "address": "Stanley, Southern District, Hong Kong Island, Hong Kong",
+    "lat": 22.21667,
+    "lon": 114.21667,
+    "description": "拥有完整的海边小镇氛围，海滨步道、老式商业街、慢节奏餐饮与开阔港湾相融。适合放慢节奏休闲游览。"
+  },
+  {
+    "name": "浅水湾",
+    "english_name": "Repulse Bay",
+    "address": "Repulse Bay, Hong Kong Island, Hong Kong",
+    "lat": 22.2381,
+    "lon": 114.1963,
+    "description": "香港成熟的城市海湾，沙滩、海景与沿海住宅区构成典型南区休闲景观。可与赤柱、香港仔、太平山顶形成“山、湾、港”的视觉对比。"
+  },
+  {
+    "name": "香港仔",
+    "english_name": "Aberdeen",
+    "address": "Aberdeen, Southern District, Hong Kong Island, Hong Kong",
+    "lat": 22.2478,
+    "lon": 114.15199,
+    "description": "贴近渔港与港湾生活的旧香港风貌，与摩天楼密集区形成鲜明对比。在已有浅水湾、赤柱的行程中，它的核心价值是独特港湾气质，而不是景点密度。"
+  },
+  {
+    "name": "坚尼地城",
+    "english_name": "Kennedy Town",
+    "address": "Kennedy Town, Hong Kong Island, Hong Kong",
+    "lat": 22.28,
+    "lon": 114.125,
+    "description": "位于港岛西侧，以港岛西海岸线、街区氛围和日落景观受欢迎。相比中环、上环更生活化，适合步行摄影、咖啡休憩与海边短停。"
+  },
+  {
+    "name": "西营盘",
+    "english_name": "Sai Ying Pun",
+    "address": "Sai Ying Pun, Hong Kong Island, Hong Kong",
+    "lat": 22.2859,
+    "lon": 114.143,
+    "description": "港岛西老社区与新式餐饮、咖啡店交融的区域。坡道与街角视线富有层次，可与坚尼地城、上环连成港岛西城市肌理游览线。"
+  },
+  {
+    "name": "深水埗",
+    "english_name": "Sham Shui Po",
+    "address": "Sham Shui Po, Kowloon, Hong Kong",
+    "lat": 22.33023,
+    "lon": 114.15945,
+    "description": "展现“地面层香港”风貌，电子街、布料市场、街头小吃与旧住宅交织。它不一定是传统漂亮景点，但烟火气和街头感很强。"
+  },
+  {
+    "name": "弥敦道",
+    "english_name": "Nathan Road",
+    "address": "Nathan Road, Kowloon, Hong Kong",
+    "lat": 22.305,
+    "lon": 114.171,
+    "description": "九龙重要的南北向主轴，串联尖沙咀、油麻地、旺角片区。"
+  },
+  {
+    "name": "维多利亚港",
+    "english_name": "Victoria Harbour",
+    "address": "Victoria Harbour, between Hong Kong Island and Kowloon, Hong Kong",
+    "lat": 22.29,
+    "lon": 114.17,
+    "description": "整体行程的核心总景观。太平山顶、星光大道、天星小轮、金紫荆广场、香港摩天轮等地标，都围绕维港展开。"
+  },
+  {
+    "name": "上环",
+    "english_name": "Sheung Wan",
+    "address": "Sheung Wan, Hong Kong Island, Hong Kong",
+    "lat": 22.28524,
+    "lon": 114.15139,
+    "description": "适合慢逛街区，承载早期香港城市发展印记。它以老街、传统行业、低调的港岛西历史肌理为特色，偏向旧街区与日常生活体验。"
+  },
+  {
+    "name": "香港故宫文化博物馆",
+    "english_name": "Hong Kong Palace Museum",
+    "address": "West Kowloon Cultural District, 8 Museum Drive, Kowloon, Hong Kong",
+    "lat": 22.3021,
+    "lon": 114.1556,
+    "description": "清单内核心文化机构目的地，内容密度高，需要预留充足停留时间。适合天气不佳或希望安排室内文化行程时游览。"
+  },
+  {
+    "name": "油麻地警署",
+    "english_name": "Old Yau Ma Tei Police Station",
+    "address": "627 Canton Road, Yau Ma Tei, Kowloon, Hong Kong",
+    "lat": 22.30967,
+    "lon": 114.1687,
+    "description": "凭借特色建筑与影视记忆成为打卡点，无大型内部展陈。适合与油麻地、庙街、弥敦道组成老九龙步行段的外观游览。"
+  },
+  {
+    "name": "庙街",
+    "english_name": "Temple Street Night Market",
+    "address": "Temple Street, Jordan / Yau Ma Tei, Kowloon, Hong Kong",
+    "lat": 22.30767,
+    "lon": 114.17029,
+    "description": "香港极具代表性的夜市，夜间氛围浓郁。适合傍晚后前往，体验街市氛围、品尝街边小吃、感受油麻地与佐敦一带的夜生活。"
+  },
+  {
+    "name": "曲奇四重奏（旺角店）",
+    "english_name": "Cookies Quartet (Mong Kok Branch)",
+    "address": "Shop 2-4, G/F, Fook Tai Building, 24-26 Soy Street / 1 Sai Yeung Choi Street South, Mong Kok, Kowloon, Hong Kong",
+    "lat": 22.31786,
+    "lon": 114.17057,
+    "description": "官方地址为 Shop 2-4, G/F, Fook Tai Bldg., 24-26 Soy Street / 1 Sai Yeung Choi Street South, Mong Kok, Kowloon。它是旺角/油麻地区域的顺路伴手礼补给点，不是独立游览目的地。"
+  },
+  {
+    "name": "重庆大厦",
+    "english_name": "Chungking Mansions",
+    "address": "36-44 Nathan Road, Tsim Sha Tsui, Kowloon, Hong Kong",
+    "lat": 22.29639,
+    "lon": 114.17278,
+    "description": "浓缩尖沙咀全球化流动特质，汇聚低价住宿、异国餐饮等多元业态。适合短暂停留观察城市特色空间。"
+  },
+  {
+    "name": "金紫荆广场",
+    "english_name": "Golden Bauhinia Square",
+    "address": "1 Expo Drive, Wan Chai, Hong Kong Island, Hong Kong",
+    "lat": 22.28427,
+    "lon": 114.17376,
+    "description": "融合历史象征与海滨公共空间的地标，可与湾仔会展、维港步行线串联。若时间合适，早上 8 点升旗礼更有仪式感。"
+  },
+  {
+    "name": "西环钟声泳棚",
+    "english_name": "Sai Wan Swimming Shed",
+    "address": "Victoria Road near Mount Davis, Sai Wan, Hong Kong Island, Hong Kong",
+    "lat": 22.2799,
+    "lon": 114.11746,
+    "description": "摄影辨识度高，木栈道延伸至海面的线条极具特色。它不是标准化观光设施，适合日间天气良好时短暂打卡。"
+  },
+  {
+    "name": "大馆",
+    "english_name": "Tai Kwun",
+    "address": "10 Hollywood Road, Central, Hong Kong Island, Hong Kong",
+    "lat": 22.28126,
+    "lon": 114.15404,
+    "description": "成熟的历史建筑再利用典范，集合监狱、警署、法院遗产与当代艺术功能。建议预留较充足游览时间，可与自动扶梯、艺穗会、中环街市串联。"
+  },
+  {
+    "name": "艺穗会",
+    "english_name": "Fringe Club",
+    "address": "2 Lower Albert Road, Central, Hong Kong Island, Hong Kong",
+    "lat": 22.28014,
+    "lon": 114.15575,
+    "description": "偏向在地文化的点位，价值依当日演出或展演活动而定。单纯观光时可与中环历史建筑顺路游览，有感兴趣的演出时可作为核心目的地。"
+  },
+  {
+    "name": "卢吉道观景台",
+    "english_name": "Lugard Road Lookout",
+    "address": "31 Lugard Road, The Peak, Hong Kong Island, Hong Kong",
+    "lat": 22.27792,
+    "lon": 114.14758,
+    "description": "太平山顶可避开主平台拥挤的观景点，沿卢吉道步行约 20 分钟可达，拥有开阔观景视野，适合早晨、黄昏或天气通透时前往。"
+  },
+  {
+    "name": "海港城（港威商场）",
+    "english_name": "Harbour City / Gateway Arcade",
+    "address": "3-27 Canton Road, Tsim Sha Tsui, Kowloon, Hong Kong",
+    "lat": 22.2975,
+    "lon": 114.16861,
+    "description": "香港大型购物综合体，地处尖沙咀与维港交界，兼具商场与海景节点功能。适合作为尖沙咀段的购物与补给站点。"
+  },
+  {
+    "name": "香港半岛酒店",
+    "english_name": "The Peninsula Hong Kong",
+    "address": "22 Salisbury Road, Tsim Sha Tsui, Kowloon, Hong Kong",
+    "lat": 22.29051,
+    "lon": 114.16958,
+    "description": "拥有近百年历史的尖沙咀经典地标酒店，地址为 22 Salisbury Road, Tsim Sha Tsui。不消费可外观短停，若体验下午茶或餐饮服务，则需单独预留时间。"
+  },
+  {
+    "name": "金钟",
+    "english_name": "Admiralty",
+    "address": "Admiralty, Hong Kong Island, Hong Kong",
+    "lat": 22.27964,
+    "lon": 114.16549,
+    "description": "位于中环、湾仔与维港之间的港岛核心转换节点，便于串联会展、金紫荆广场、太古广场、中环海滨及港岛山脚步行网。"
+  },
+  {
+    "name": "昂坪360",
+    "english_name": "Ngong Ping 360",
+    "address": "Ngong Ping Cable Car Terminal, Ngong Ping, Lantau Island, Hong Kong",
+    "lat": 22.2565,
+    "lon": 113.902,
+    "description": "昂坪360连接东涌与昂坪，上山过程本身就是核心景观。缆车适合观赏大屿山地形、村落、机场方向与海峡风光，可与大澳组合成一日行程。"
+  },
+  {
+    "name": "大澳",
+    "english_name": "Tai O",
+    "address": "Tai O, Lantau Island, Outlying Islands, Hong Kong",
+    "lat": 22.25515,
+    "lon": 113.86309,
+    "description": "远离城市核心、文化辨识度极高的渔村，以棚屋、水道、渔村传统为特色。它是村镇型目的地，不是单一建筑点位，适合半日至一日慢节奏游览。"
+  },
+  {
+    "name": "香港摩天轮",
+    "english_name": "Hong Kong Observation Wheel",
+    "address": "33 Man Kwong Street, Central, Hong Kong Island, Hong Kong",
+    "lat": 22.2853,
+    "lon": 114.1617,
+    "description": "中环海滨轻量级观景设施，体验耗时短。与中环码头、海滨、会展方向天际线组合时出片效果较好，适合融入海边步行行程。"
+  },
+  {
+    "name": "中环街市",
+    "english_name": "Central Market",
+    "address": "93 Queen's Road Central, Central, Hong Kong Island, Hong Kong",
+    "lat": 22.28403,
+    "lon": 114.15541,
+    "description": "中环旧建筑活化案例，融合零售与公共空间。可在游览自动扶梯或大馆时顺路前往，亮点在于建筑更新后的公共空间感与街区连通性。"
+  },
+  {
+    "name": "香港迪士尼乐园",
+    "english_name": "Hong Kong Disneyland",
+    "address": "Hong Kong Disneyland Resort, Lantau Island, Hong Kong",
+    "lat": 22.31300,
+    "lon": 114.04128,
+    "description": "香港迪士尼乐园位于大屿山竹篙湾，是香港代表性的主题乐园景点，集游乐设施、主题巡游、角色互动、剧场表演与夜间烟花/灯光表演于一体。相比市区型景点，它更适合作为独立一日行程安排，建议预留完整半天至一天游览时间。"
+  }
+]

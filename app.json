@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "泉州古城导览",
-    "slug": "quanzhou-citywalk-rn",
+    "name": "香港旅行导览",
+    "slug": "hong-kong-travel-rn",
     "version": "1.0.0",
     "platforms": [
       "android",
@@ -20,7 +20,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "用于在导览地图中显示你和泉州景点的相对位置。"
+        "NSLocationWhenInUseUsageDescription": "用于在导览地图中显示你和香港景点的相对位置。"
       }
     },
     "android": {
@@ -34,7 +34,7 @@
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.quanzhoucitywalkrn"
+      "package": "com.anonymous.hktravelguide"
     },
     "web": {
       "favicon": "./assets/favicon.png"

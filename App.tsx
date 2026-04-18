@@ -1,7 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import Geolocation, {
   type GeoError,
   type GeoOptions,
@@ -33,7 +33,7 @@ import {
   allSpots,
   cityRecommendations,
   galleryItems,
-  getDistanceFromOldCity,
+  getDistanceFromCenter,
   getSpotBody,
   getSpotById,
   getSpotDuration,
@@ -44,21 +44,16 @@ import {
   getSpotTags,
   inferSpotCategory,
   lonelyPlanetHighlights,
-  oldCityCenter,
   openingHoursMethodNote,
   places,
-  ratingMethodNote,
   recommendedRoute,
+  routes,
+  ratingMethodNote,
   regionalSpotCollections,
-  routeStops,
   searchSpots,
   sourceLinks,
-} from "./src/lib/quanzhou";
+} from "./src/lib/hongKong";
 
-const routeCoords = routeStops.map((spot: any) => spot.coords as [number, number]);
-const extraOldCitySpots = Object.values(places).filter(
-  (spot: any) => !recommendedRoute.stops.includes(spot.id)
-);
 const cityOnlySpots = allRegionalSpots.filter((spot: any) => !places[spot.id]);
 
 const palette = {
@@ -79,26 +74,25 @@ const palette = {
 };
 
 const uiCopy = {
-  appSubtitle: "古城主线与全域景点",
-  routeChip: "古城主线",
-  routeMapTitle: "古城主线",
-  routeMapKicker: "古城步行",
-  allCityTitle: "泉州全域景点",
-  allCityKicker: "全域分布",
-  routeLogicTitle: "这条主线怎么走",
-  routeLogicNote: "把寺观、街巷和城南海港串成一条顺路的步行线。",
-  mapHintRoute: "地图会同时显示主线、古城顺路景点和外围延伸景点。",
+  appSubtitle: "1 日、3 日、5 日路线与全港景点",
+  routeMapTitle: "香港一日游",
+  routeMapKicker: "经典路线",
+  allCityTitle: "香港全域景点",
+  allCityKicker: "全港分布",
+  routeLogicTitle: "这条线路怎么走",
+  routeLogicNote: "先选天数，再看地图、延伸玩法和分区景点。",
+  mapHintRoute: "地图会显示当前路线、顺路景点和其他片区的香港点位。",
   mapHintFocus: "地图已切到当前景点或专题。",
-  searchEmpty: "没有找到相关景点，可试试“寺”“桥”“海”“古城”。",
-  extendTitle: "古城之外还可以去哪",
-  extendNote: "先看主题推荐，再看行程建议，最后按区域筛选景点。",
+  searchEmpty: "没有找到相关景点，可试试“中环”“维港”“海边”“离岛”“博物馆”。",
+  extendTitle: "香港还能怎么排",
+  extendNote: "先看主题推荐，再看替代路线，最后按片区筛景点。",
   extendIndex: "区域索引",
   extendLp: "主题推荐",
-  extendGuide: "行程建议",
+  extendGuide: "替代路线",
   extendMapAction: "在地图查看",
   guideKicker: "图册与信息",
-  guideTitle: "图册、时间与出发信息",
-  guideNote: "适合出发前快速浏览。",
+  guideTitle: "路线图册、时间与出发信息",
+  guideNote: "当前会跟着你选中的 1 日 / 3 日 / 5 日路线一起切换。",
 };
 
 const glyphMap: Record<string, string> = {
@@ -144,14 +138,34 @@ function App() {
   const tabBarHeight = 74;
   const tabBarReservedSpace = tabBarBottom + tabBarHeight + 12;
   const [currentTab, setCurrentTab] = useState<TabKey>("route");
+  const [routeId, setRouteId] = useState<string>(recommendedRoute.id);
   const [extendView, setExtendView] = useState<ExtendView>("index");
+  const currentRoute = useMemo(
+    () => routes.find((route: any) => route.id === routeId) || routes[0],
+    [routeId]
+  );
+  const routeStops = useMemo(
+    () => currentRoute.stops.map((stopId: string) => places[stopId]).filter(Boolean),
+    [currentRoute]
+  );
+  const routeCoords = useMemo(
+    () => routeStops.map((spot: any) => spot.coords as [number, number]).filter(Boolean),
+    [routeStops]
+  );
+  const extraOldCitySpots = useMemo(
+    () =>
+      Object.values(places).filter(
+        (spot: any) => !currentRoute.stops.includes(spot.id)
+      ),
+    [currentRoute]
+  );
   const [selectedSpotId, setSelectedSpotId] = useState<string>(
-    recommendedRoute.stops[0]
+    currentRoute.stops[0]
   );
   const [detailSpotId, setDetailSpotId] = useState<string | null>(null);
   const [mapMode, setMapMode] = useState<"route" | "focus" | "all">("route");
   const [focusedSpotIds, setFocusedSpotIds] = useState<string[]>(
-    recommendedRoute.stops
+    currentRoute.stops
   );
   const [mapTitle, setMapTitle] = useState<string>(uiCopy.routeMapTitle);
   const [mapKicker, setMapKicker] = useState<string>(uiCopy.routeMapKicker);
@@ -197,6 +211,15 @@ function App() {
     [searchQuery]
   );
 
+  useEffect(() => {
+    setSelectedSpotId(currentRoute.stops[0]);
+    if (mapMode === "route") {
+      setFocusedSpotIds(currentRoute.stops);
+      setMapTitle(currentRoute.label);
+      setMapKicker(currentRoute.badge);
+    }
+  }, [currentRoute, mapMode]);
+
   const mapVisibleSpots = useMemo(() => {
     if (mapMode === "route") {
       return {
@@ -219,29 +242,29 @@ function App() {
       .filter(Boolean);
 
     return {
-      route: focused.filter((spot: any) => recommendedRoute.stops.includes(spot.id)),
+      route: focused.filter((spot: any) => currentRoute.stops.includes(spot.id)),
       extras: focused.filter(
         (spot: any) =>
-          !recommendedRoute.stops.includes(spot.id) && places[spot.id]
+          !currentRoute.stops.includes(spot.id) && places[spot.id]
       ),
       city: focused.filter((spot: any) => !places[spot.id]),
     };
-  }, [focusedSpotIds, mapMode]);
+  }, [currentRoute, extraOldCitySpots, focusedSpotIds, mapMode, routeStops]);
 
   function focusRoute() {
     setCurrentTab("map");
     setMapMode("route");
-    setFocusedSpotIds(recommendedRoute.stops);
-    setSelectedSpotId(recommendedRoute.stops[0]);
-    setMapTitle(uiCopy.routeMapTitle);
-    setMapKicker(uiCopy.routeMapKicker);
+    setFocusedSpotIds(currentRoute.stops);
+    setSelectedSpotId(currentRoute.stops[0]);
+    setMapTitle(currentRoute.label);
+    setMapKicker(currentRoute.badge);
   }
 
   function focusAllCity() {
     setCurrentTab("map");
     setMapMode("all");
     setFocusedSpotIds(allSpots.map((spot: any) => spot.id));
-    setSelectedSpotId(recommendedRoute.stops[0]);
+    setSelectedSpotId(currentRoute.stops[0]);
     setMapTitle(uiCopy.allCityTitle);
     setMapKicker(uiCopy.allCityKicker);
   }
@@ -491,6 +514,32 @@ function App() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.segmentRow}
+        >
+          {routes.map((route: any) => (
+            <Pressable
+              key={route.id}
+              style={[
+                styles.segmentChip,
+                routeId === route.id && styles.segmentChipActive,
+              ]}
+              onPress={() => setRouteId(route.id)}
+            >
+              <Text
+                style={[
+                  styles.segmentChipText,
+                  routeId === route.id && styles.segmentChipTextActive,
+                ]}
+              >
+                {route.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
         <LinearGradient
           colors={["rgba(122, 182, 255, 0.28)", "rgba(255, 141, 114, 0.1)"]}
           start={{ x: 0, y: 0 }}
@@ -498,24 +547,24 @@ function App() {
           style={styles.heroCard}
         >
           <Image
-            source={getCitywalkImage("kaiyuan.jpg")}
+            source={getCitywalkImage(currentRoute.heroImage)}
             style={styles.heroImage}
           />
           <View style={styles.heroShade} />
           <View style={styles.heroContent}>
             <View style={styles.heroEyebrowRow}>
-              <GlassPill icon="walk-outline" label={uiCopy.routeChip} />
+              <GlassPill icon="walk-outline" label={currentRoute.badge} />
               <GlassPill
                 icon="time-outline"
-                label={recommendedRoute.note || "半天到一天"}
+                label={currentRoute.note || currentRoute.days}
               />
             </View>
-            <Text style={styles.heroTitle}>{recommendedRoute.headline}</Text>
-            <Text style={styles.heroText}>{recommendedRoute.lead}</Text>
+            <Text style={styles.heroTitle}>{currentRoute.headline}</Text>
+            <Text style={styles.heroText}>{currentRoute.lead}</Text>
             <View style={styles.heroStatsRow}>
-              <StatChip label="站点" value={`${recommendedRoute.stops.length} 站`} />
-              <StatChip label="方式" value="步行为主" />
-              <StatChip label="适合" value="首访泉州" />
+              <StatChip label="站点" value={`${currentRoute.stops.length} 站`} />
+              <StatChip label="方式" value={currentRoute.mode} />
+              <StatChip label="适合" value={currentRoute.fit} />
             </View>
             <View style={styles.heroActionRow}>
               <ActionButton
@@ -534,13 +583,13 @@ function App() {
         </LinearGradient>
 
         <SectionTitle
-          kicker="主线逻辑"
+          kicker="路线逻辑"
           title={uiCopy.routeLogicTitle}
           note={uiCopy.routeLogicNote}
         />
 
         <View style={styles.cardGrid}>
-          {recommendedRoute.panels.map((panel: any) => (
+          {currentRoute.panels.map((panel: any) => (
             <GlassCard key={panel.title} style={styles.logicCard}>
               <Text style={styles.logicTitle}>{panel.title}</Text>
               <Text style={styles.cardText}>{panel.body}</Text>
@@ -549,9 +598,9 @@ function App() {
         </View>
 
         <SectionTitle
-          kicker="步行顺序"
-          title="一站一站往下走"
-          note="列表里直接带评级、开放参考和地图入口。"
+          kicker="行程站点"
+          title="按这条路线往下走"
+          note="每一站都带评级、开放参考和地图入口。"
         />
 
         <View style={styles.stopsWrap}>
@@ -628,7 +677,7 @@ function App() {
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="搜索景点、寺观、桥梁、街区或片区"
+              placeholder="搜索景点、海滨、街区、商圈、离岛或博物馆"
               placeholderTextColor={palette.subText}
               style={styles.searchInput}
             />
@@ -704,7 +753,7 @@ function App() {
         showsVerticalScrollIndicator={false}
       >
         <SectionTitle
-          kicker="泉州延伸"
+          kicker="香港延伸"
           title={uiCopy.extendTitle}
           note={uiCopy.extendNote}
         />
@@ -879,9 +928,9 @@ function App() {
                   >
                     <View style={styles.indexHeadMain}>
                       <Text style={styles.indexTitle}>{spot.name}</Text>
-                      <Text style={styles.indexMeta}>
-                        {inferSpotCategory(spot)} · {getDistanceFromOldCity(spot.coords)}
-                      </Text>
+                        <Text style={styles.indexMeta}>
+                        {inferSpotCategory(spot)} · {getDistanceFromCenter(spot.coords)}
+                        </Text>
                     </View>
                     <View style={styles.indexRight}>
                       <RatingBadge score={getSpotRating(spot.id)} compact />
@@ -908,7 +957,7 @@ function App() {
                           开放参考：{getSpotOpenHours(spot.id)}
                         </Text>
                         <Text style={styles.metaLine}>
-                          距古城中心：{getDistanceFromOldCity(spot.coords)}
+                          距中环：{getDistanceFromCenter(spot.coords)}
                         </Text>
                         <Text style={styles.metaLine}>
                           到达建议：{spot.travel || "建议结合当天路线安排"}
@@ -991,7 +1040,7 @@ function App() {
         <GlassCard>
           <Text style={styles.featureTitle}>路线故事线</Text>
           <View style={styles.storyList}>
-            {recommendedRoute.chapters.map((chapter: any) => (
+            {currentRoute.chapters.map((chapter: any) => (
               <View key={chapter.step} style={styles.storyItem}>
                 <View style={styles.storyBadge}>
                   <Text style={styles.storyBadgeText}>{chapter.step}</Text>
@@ -1008,7 +1057,7 @@ function App() {
         <GlassCard>
           <Text style={styles.featureTitle}>时间分配</Text>
           <View style={styles.stackGap}>
-            {recommendedRoute.schedule.map((item: any) => (
+            {currentRoute.schedule.map((item: any) => (
               <View key={item.phase} style={styles.scheduleCard}>
                 <Text style={styles.schedulePhase}>{item.phase}</Text>
                 <Text style={styles.scheduleTitle}>{item.title}</Text>
@@ -1021,7 +1070,7 @@ function App() {
         <GlassCard>
           <Text style={styles.featureTitle}>出发前先看这几条</Text>
           <View style={styles.stackGap}>
-            {recommendedRoute.prep.map((item: string) => (
+            {currentRoute.prep.map((item: string) => (
               <Text key={item} style={styles.listLine}>
                 • {item}
               </Text>
@@ -1062,7 +1111,7 @@ function App() {
       >
         <View style={styles.appHeader}>
           <View>
-            <Text style={styles.appTitle}>泉州古城导览</Text>
+            <Text style={styles.appTitle}>香港旅行导览</Text>
             <Text style={styles.appSubtitle}>{uiCopy.appSubtitle}</Text>
           </View>
         </View>
@@ -1082,7 +1131,7 @@ function App() {
         >
           <TabButton
             icon="walk-outline"
-            label="主线"
+            label="行程"
             active={currentTab === "route"}
             onPress={() => setCurrentTab("route")}
           />
@@ -1167,7 +1216,7 @@ function SpotDetailModal({
               {!!spot.coords && (
                 <MetaPill
                   icon="navigate-outline"
-                  text={`距古城 ${getDistanceFromOldCity(spot.coords)}`}
+                  text={`距中环 ${getDistanceFromCenter(spot.coords)}`}
                 />
               )}
             </View>

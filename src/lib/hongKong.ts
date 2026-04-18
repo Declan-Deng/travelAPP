@@ -1,6 +1,6 @@
-import { quanzhouData } from "../data/quanzhouData";
+import { hongKongData } from "../data/hongKongData";
 
-const data = quanzhouData as any;
+const data = hongKongData as any;
 
 export const places = data.places as Record<string, any>;
 export const routes = data.routes as any[];
@@ -15,9 +15,8 @@ export const placeImageOverrides = data.placeImageOverrides as Record<string, st
 export const spotImageOverrides = data.spotImageOverrides as Record<string, string>;
 export const ratingMethodNote = data.ratingMethodNote as string;
 export const openingHoursMethodNote = data.openingHoursMethodNote as string;
-export const oldCityCenter = data.quanzhouOldCityCenter as [number, number];
-export const recommendedRoute =
-  routes.find((route) => route.id === "recommended") || routes[0];
+export const hongKongCenter = data.hongKongCenter as [number, number];
+export const recommendedRoute = routes[0];
 
 export const allRegionalSpots = regionalSpotCollections.flatMap((section) =>
   section.spots.map((spot: any) => ({
@@ -32,14 +31,12 @@ export const regionalSpotLookup = new Map(
   allRegionalSpots.map((spot: any) => [spot.id, spot])
 );
 
-export const routeStops = recommendedRoute.stops.map((stopId: string) => places[stopId]);
-
 export const allSpots = [
   ...Object.values(places).map((place: any) => ({
     ...place,
-    area: place.theme,
-    source: "古城主线",
-    type: recommendedRoute.stops.includes(place.id) ? "主线景点" : "古城顺路景点",
+    area: place.area || place.theme,
+    source: place.area || "香港行程",
+    type: "香港景点",
   })),
   ...allRegionalSpots
     .filter((spot: any) => !places[spot.id])
@@ -57,24 +54,24 @@ export function getSpotById(spotId?: string | null) {
 }
 
 export function getSpotImageKey(spotId?: string | null) {
-  if (!spotId) return "quanzhou-old-city.jpg";
+  if (!spotId) return "spot_detail_image_04.png";
   return (
     placeMedia[spotId]?.image ||
     regionalSpotLookup.get(spotId)?.image ||
     placeImageOverrides[spotId] ||
     spotImageOverrides[spotId] ||
-    "quanzhou-old-city.jpg"
+    "spot_detail_image_04.png"
   );
 }
 
 export function getSpotRating(spotId?: string | null) {
-  if (!spotId) return 4.2;
+  if (!spotId) return 4.6;
   return Number(spotGuideMeta[spotId]?.rating || 4.2);
 }
 
 export function getSpotOpenHours(spotId?: string | null) {
-  if (!spotId) return "以现场公示为准";
-  return spotGuideMeta[spotId]?.openHours || "以现场公示为准";
+  if (!spotId) return "以当日安排为准";
+  return spotGuideMeta[spotId]?.openHours || "以当日安排为准";
 }
 
 export function getSpotDuration(spot: any) {
@@ -117,9 +114,9 @@ export function haversineKm(a: [number, number], b: [number, number]) {
   return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
-export function getDistanceFromOldCity(coords?: [number, number]) {
+export function getDistanceFromCenter(coords?: [number, number]) {
   if (!coords) return "";
-  const value = haversineKm(oldCityCenter, coords);
+  const value = haversineKm(hongKongCenter, coords);
   if (value < 1) return `${Math.round(value * 1000)} m`;
   return `${value.toFixed(value < 10 ? 1 : 0)} km`;
 }
@@ -129,23 +126,23 @@ export function inferSpotCategory(spot: any) {
     .filter(Boolean)
     .join(" ");
 
-  if (/(佛教|道教|伊斯兰|妈祖|真武|祖师|寺|庙|宫观|信仰|少林)/.test(text)) {
-    return "寺观信仰";
+  if (/(博物馆|故宫|文化|大馆|艺穗会|酒店|警署|街市活化|乐园)/.test(text)) {
+    return "文化地标";
   }
 
-  if (/(桥|水路|滩涂|桥头|水岸|渔港|港口)/.test(text)) {
-    return "桥梁水岸";
+  if (/(小轮|码头|海港|海滨|维港|摩天轮|金紫荆|星光大道)/.test(text)) {
+    return "海滨维港";
   }
 
-  if (/(街区|古街|村落|古民居|番仔楼|街巷|古城|卫城)/.test(text)) {
-    return "街区村落";
+  if (/(山顶|观景台|泳滩|浅水湾|赤柱|香港仔|大潭|龟背湾|昂坪|大澳|离岛)/.test(text)) {
+    return "山海离岛";
   }
 
-  if (/(博物馆|非遗|演出|木偶|瓷都|茶)/.test(text)) {
-    return "博物演艺";
+  if (/(中环|上环|坚尼地城|西营盘|港岛|扶手电梯|街市|金钟|铜锣湾)/.test(text)) {
+    return "港岛漫游";
   }
 
-  return "海边山城";
+  return "街区商圈";
 }
 
 export function searchSpots(query: string) {

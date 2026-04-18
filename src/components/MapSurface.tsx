@@ -54,16 +54,16 @@ export default function MapSurface({
   getSpotRating,
 }: Props) {
   const frameId = useMemo(
-    () => `quanzhou-map-${Math.random().toString(36).slice(2)}`,
+    () => `hongkong-map-${Math.random().toString(36).slice(2)}`,
     []
   );
   const [tilesReady, setTilesReady] = useState(false);
   const selectedSpotId = selectedSpot?.id ?? null;
   const selectedKind = useMemo(() => {
     if (!selectedSpotId) return "当前景点";
-    if (routeSpots.some((spot) => spot.id === selectedSpotId)) return "主线站点";
-    if (extraSpots.some((spot) => spot.id === selectedSpotId)) return "古城顺路景点";
-    if (citySpots.some((spot) => spot.id === selectedSpotId)) return "全域景点";
+    if (routeSpots.some((spot) => spot.id === selectedSpotId)) return "当前路线";
+    if (extraSpots.some((spot) => spot.id === selectedSpotId)) return "顺路景点";
+    if (citySpots.some((spot) => spot.id === selectedSpotId)) return "全港景点";
     return "当前景点";
   }, [citySpots, extraSpots, routeSpots, selectedSpotId]);
 
@@ -149,7 +149,7 @@ export default function MapSurface({
                 </View>
                 <View style={styles.titleRow}>
                   <Text numberOfLines={1} style={styles.dockTitle}>
-                    {selectedSpot?.name || "泉州古城"}
+                    {selectedSpot?.name || "香港"}
                   </Text>
                 </View>
                 <Text numberOfLines={2} style={styles.dockText}>
@@ -167,7 +167,7 @@ export default function MapSurface({
 
             <View style={styles.actionRow}>
               <ChipButton
-                label="主线"
+                label="路线"
                 onPress={onFocusRoute}
                 active={mapMode === "route"}
               />
