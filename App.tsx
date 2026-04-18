@@ -2,9 +2,14 @@ import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
 import { ReactNode, useMemo, useState } from "react";
+import Geolocation, {
+  type GeoError,
+  type GeoOptions,
+  type GeoPosition,
+  PositionError,
+} from "react-native-geolocation-service";
 import {
   Alert,
-  Dimensions,
   Image,
   Modal,
   Pressable,
@@ -12,6 +17,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import {
@@ -49,10 +55,6 @@ import {
   sourceLinks,
 } from "./src/lib/quanzhou";
 
-const { width: screenWidth } = Dimensions.get("window");
-const contentWidth = screenWidth - 32;
-const regionCardWidth = Math.floor((contentWidth - 12) / 2);
-const galleryCardWidth = contentWidth;
 const routeCoords = routeStops.map((spot: any) => spot.coords as [number, number]);
 const extraOldCitySpots = Object.values(places).filter(
   (spot: any) => !recommendedRoute.stops.includes(spot.id)
@@ -122,8 +124,25 @@ const glyphMap: Record<string, string> = {
 type TabKey = "route" | "map" | "extend" | "guide";
 type ExtendView = "index" | "lp" | "guide";
 
+function getNativePosition(options: GeoOptions) {
+  return new Promise<GeoPosition>((resolve, reject) => {
+    Geolocation.getCurrentPosition(resolve, reject, options);
+  });
+}
+
+function toLatLng(position: GeoPosition): [number, number] {
+  return [position.coords.latitude, position.coords.longitude];
+}
+
 function App() {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const contentWidth = Math.max(screenWidth - 32, 280);
+  const regionCardWidth = Math.max(Math.floor((contentWidth - 12) / 2), 132);
+  const galleryCardWidth = contentWidth;
+  const tabBarBottom = Math.max(14, insets.bottom + 8);
+  const tabBarHeight = 74;
+  const tabBarReservedSpace = tabBarBottom + tabBarHeight + 12;
   const [currentTab, setCurrentTab] = useState<TabKey>("route");
   const [extendView, setExtendView] = useState<ExtendView>("index");
   const [selectedSpotId, setSelectedSpotId] = useState<string>(
@@ -143,6 +162,7 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>("全部");
   const [expandedSpotId, setExpandedSpotId] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
 
   const selectedSpot = getSpotById(selectedSpotId);
   const selectedRegion = useMemo(
@@ -251,24 +271,215 @@ function App() {
   }
 
   async function locateUser() {
-    const permission = await Location.requestForegroundPermissionsAsync();
-    if (permission.status !== "granted") {
-      Alert.alert("定位未开启", "请在系统权限里允许定位后再试。");
-      return;
+    async function withTimeout<T>(
+      promise: Promise<T>,
+      ms: number,
+      code: string
+    ): Promise<T> {
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          setTimeout(() => reject(new Error(code)), ms);
+        }),
+      ]);
     }
 
-    const position = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
-
-    const coords: [number, number] = [
-      position.coords.latitude,
-      position.coords.longitude,
-    ];
-    setUserLocation(coords);
     setCurrentTab("map");
-    setMapKicker("你的位置");
-    setMapTitle("定位成功");
+    setMapMode("all");
+    setFocusedSpotIds(allSpots.map((spot: any) => spot.id));
+    setMapKicker("正在定位");
+    setMapTitle("正在获取位置…");
+    setIsLocating(true);
+    let fallbackCoords: [number, number] | null = null;
+    let fallbackProvider = "";
+
+    try {
+      console.log("[locate] start");
+      const servicesEnabled = await withTimeout(
+        Location.hasServicesEnabledAsync(),
+        3000,
+        "SERVICES_TIMEOUT"
+      );
+      console.log("[locate] servicesEnabled", servicesEnabled);
+      if (!servicesEnabled) {
+        if (typeof Location.enableNetworkProviderAsync === "function") {
+          try {
+            console.log("[locate] requesting network provider");
+            await withTimeout(
+              Location.enableNetworkProviderAsync(),
+              6000,
+              "PROVIDER_TIMEOUT"
+            );
+          } catch {
+            Alert.alert("定位服务未开启", "请先在系统里打开定位服务，再点一次定位。");
+            return;
+          }
+        } else {
+          Alert.alert("定位服务未开启", "请先在系统里打开定位服务，再点一次定位。");
+          return;
+        }
+      }
+
+      setMapKicker("检查权限");
+      let permission = await withTimeout(
+        Location.getForegroundPermissionsAsync(),
+        3000,
+        "PERMISSION_CHECK_TIMEOUT"
+      );
+      console.log("[locate] foreground permission", permission.status);
+      if (permission.status !== "granted") {
+        setMapKicker("请求定位权限");
+        permission = await withTimeout(
+          Location.requestForegroundPermissionsAsync(),
+          12000,
+          "PERMISSION_REQUEST_TIMEOUT"
+        );
+        console.log("[locate] requested permission", permission.status);
+      }
+
+      if (permission.status !== "granted") {
+        setMapKicker("定位不可用");
+        setMapTitle("未获得定位权限");
+        Alert.alert("定位权限未开启", "请在系统权限里允许定位后再试。");
+        return;
+      }
+
+      setMapKicker("读取最近位置");
+      try {
+        const lastKnown = await getNativePosition({
+          accuracy: { android: "balanced", ios: "hundredMeters" },
+          enableHighAccuracy: false,
+          timeout: 6000,
+          maximumAge: 1000 * 60 * 30,
+          showLocationDialog: false,
+          forceRequestLocation: true,
+          forceLocationManager: true,
+        });
+        fallbackCoords = toLatLng(lastKnown);
+        fallbackProvider = lastKnown.provider || "cached";
+        console.log("[locate] lastKnown ok", fallbackProvider, lastKnown.coords.accuracy);
+
+        if (fallbackCoords) {
+          setUserLocation(fallbackCoords);
+          setMapKicker("最近位置");
+          setMapTitle("你的位置");
+        }
+      } catch (error: unknown) {
+        const geoError = error as GeoError;
+        console.log(
+          "[locate] lastKnown error",
+          geoError?.code ?? "unknown",
+          geoError?.message ?? error
+        );
+      }
+
+      setMapKicker("获取实时位置");
+      const position = await getNativePosition({
+        accuracy: { android: "high", ios: "best" },
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+        distanceFilter: 0,
+        showLocationDialog: true,
+        forceRequestLocation: true,
+        forceLocationManager: true,
+      });
+      console.log(
+        "[locate] current position ok",
+        position.provider || "live",
+        position.coords.accuracy
+      );
+
+      const coords = toLatLng(position);
+      setUserLocation(coords);
+      setMapKicker("实时定位");
+      setMapTitle("你的位置");
+    } catch (error: unknown) {
+      const geoError = error as GeoError;
+      console.log(
+        "[locate] error",
+        geoError?.code ?? "unknown",
+        geoError?.message ?? error
+      );
+      if (error instanceof Error && error.message === "SERVICES_TIMEOUT") {
+        setMapKicker("定位检查超时");
+        setMapTitle("暂时无法获取位置");
+        Alert.alert("定位检查超时", "系统定位状态检查超时了，请再试一次。");
+        return;
+      }
+
+      if (error instanceof Error && error.message === "PERMISSION_CHECK_TIMEOUT") {
+        setMapKicker("权限检查超时");
+        setMapTitle("暂时无法获取位置");
+        Alert.alert("权限检查超时", "这次没有及时拿到定位权限状态，请再试一次。");
+        return;
+      }
+
+      if (error instanceof Error && error.message === "PERMISSION_REQUEST_TIMEOUT") {
+        setMapKicker("等待授权超时");
+        setMapTitle("暂时无法获取位置");
+        Alert.alert("授权超时", "没有等到系统定位授权结果，请确认权限弹窗是否被遮挡。");
+        return;
+      }
+
+      if (
+        geoError?.code === PositionError.TIMEOUT ||
+        (error instanceof Error && error.message === "LOCATION_TIMEOUT")
+      ) {
+        if (fallbackCoords) {
+          setUserLocation(fallbackCoords);
+          setMapKicker(fallbackProvider ? `最近位置 · ${fallbackProvider}` : "最近位置");
+          setMapTitle("你的位置");
+          Alert.alert(
+            "实时定位超时",
+            "先为你显示最近一次已知位置。到开阔区域后再点一次，通常会更快拿到实时位置。"
+          );
+          return;
+        }
+
+        setMapKicker("定位超时");
+        setMapTitle("暂时无法获取位置");
+        Alert.alert(
+          "定位超时",
+          "这次没有及时拿到当前位置。请确认系统定位已开启，或到更开阔的位置后再试。"
+        );
+        return;
+      }
+
+      if (geoError?.code === PositionError.SETTINGS_NOT_SATISFIED) {
+        setMapKicker("定位模式不足");
+        setMapTitle("暂时无法获取位置");
+        Alert.alert("定位模式不足", "请把系统定位模式调到高精度后再试一次。");
+        return;
+      }
+
+      if (geoError?.code === PositionError.POSITION_UNAVAILABLE) {
+        if (fallbackCoords) {
+          setUserLocation(fallbackCoords);
+          setMapKicker(fallbackProvider ? `最近位置 · ${fallbackProvider}` : "最近位置");
+          setMapTitle("你的位置");
+          Alert.alert(
+            "实时定位暂不可用",
+            "先为你显示最近一次已知位置。等网络或卫星信号稳定后，再点一次通常就能拿到实时位置。"
+          );
+          return;
+        }
+
+        setMapKicker("定位源不可用");
+        setMapTitle("暂时无法获取位置");
+        Alert.alert("定位源不可用", "系统暂时没有返回可用位置，请稍后再试。");
+        return;
+      }
+
+      setMapKicker("定位失败");
+      setMapTitle("暂时无法获取位置");
+      Alert.alert(
+        "定位失败",
+        "这次没有成功拿到当前位置。请确认手机系统定位已开启，再重试一次。"
+      );
+    } finally {
+      setIsLocating(false);
+    }
   }
 
   function renderRouteTab() {
@@ -276,7 +487,7 @@ function App() {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: 156 + insets.bottom },
+          { paddingBottom: 28 },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -385,8 +596,8 @@ function App() {
 
   function renderMapTab() {
     return (
-        <View
-          style={[styles.mapTabShell, { paddingBottom: 132 + insets.bottom }]}
+      <View
+          style={[styles.mapTabShell, { paddingBottom: 18 }]}
         >
         <View style={styles.mapHeader}>
           <View style={styles.mapHeaderCopy}>
@@ -399,7 +610,14 @@ function App() {
             </Text>
           </View>
           <View style={styles.mapHeaderActions}>
-            <SmallIconButton icon="locate-outline" onPress={locateUser} />
+            <SmallIconButton
+              icon="locate-outline"
+              onPress={() => {
+                if (!isLocating) {
+                  void locateUser();
+                }
+              }}
+            />
             <SmallIconButton icon="expand-outline" onPress={focusAllCity} />
           </View>
         </View>
@@ -455,7 +673,7 @@ function App() {
           mapMode={mapMode}
           mapTitle={mapTitle}
           mapKicker={mapKicker}
-          bottomInset={96 + insets.bottom}
+          bottomInset={8}
           routeSpots={mapVisibleSpots.route}
           extraSpots={mapVisibleSpots.extras}
           citySpots={mapVisibleSpots.city}
@@ -481,7 +699,7 @@ function App() {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: 156 + insets.bottom },
+          { paddingBottom: 28 },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -596,6 +814,7 @@ function App() {
                   key={section.id}
                   style={[
                     styles.regionChip,
+                    { width: regionCardWidth },
                     selectedRegionId === section.id && styles.regionChipActive,
                   ]}
                   onPress={() => {
@@ -723,7 +942,7 @@ function App() {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: 156 + insets.bottom },
+          { paddingBottom: 28 },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -744,7 +963,7 @@ function App() {
           {galleryItems.map((item: any) => (
             <Pressable
               key={item.title}
-              style={styles.galleryCard}
+              style={[styles.galleryCard, { width: galleryCardWidth }]}
               onPress={() => {
                 if (item.spotId) focusSpot(item.spotId, { kicker: "图册定位" });
                 if (item.spotIds) focusCollection(item.spotIds, item.title, "图册定位");
@@ -848,7 +1067,7 @@ function App() {
           </View>
         </View>
 
-        <View style={styles.contentArea}>
+        <View style={[styles.contentArea, { paddingBottom: tabBarReservedSpace }]}>
           {currentTab === "route" && renderRouteTab()}
           {currentTab === "map" && renderMapTab()}
           {currentTab === "extend" && renderExtendTab()}
@@ -858,7 +1077,7 @@ function App() {
         <View
           style={[
             styles.tabBar,
-            { bottom: Math.max(16, insets.bottom + 10) },
+            { bottom: tabBarBottom },
           ]}
         >
           <TabButton
@@ -1244,14 +1463,15 @@ const styles = StyleSheet.create({
   },
   contentArea: {
     flex: 1,
+    minHeight: 0,
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 136,
+    paddingBottom: 28,
     gap: 16,
   },
   heroCard: {
-    height: 360,
+    minHeight: 336,
     borderRadius: 28,
     overflow: "hidden",
     borderWidth: 1,
@@ -1270,7 +1490,7 @@ const styles = StyleSheet.create({
   heroContent: {
     flex: 1,
     justifyContent: "space-between",
-    padding: 20,
+    padding: 18,
   },
   heroEyebrowRow: {
     flexDirection: "row",
@@ -1279,16 +1499,16 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     color: palette.text,
-    fontSize: 30,
-    lineHeight: 36,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: "800",
-    marginTop: 16,
+    marginTop: 12,
   },
   heroText: {
     color: "rgba(244, 247, 251, 0.92)",
-    fontSize: 15,
-    lineHeight: 24,
-    marginTop: 12,
+    fontSize: 14,
+    lineHeight: 22,
+    marginTop: 10,
   },
   heroStatsRow: {
     flexDirection: "row",
@@ -1498,7 +1718,7 @@ const styles = StyleSheet.create({
   mapTabShell: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingBottom: 120,
+    paddingBottom: 18,
     gap: 12,
   },
   mapHeader: {
@@ -1625,7 +1845,7 @@ const styles = StyleSheet.create({
   },
   featureImage: {
     width: "100%",
-    height: 180,
+    height: 168,
   },
   featureBody: {
     padding: 16,
@@ -1671,7 +1891,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   regionChip: {
-    width: regionCardWidth,
     padding: 14,
     borderRadius: 22,
     backgroundColor: "rgba(255,255,255,0.05)",
@@ -1773,8 +1992,7 @@ const styles = StyleSheet.create({
     paddingRight: 24,
   },
   galleryCard: {
-    width: galleryCardWidth,
-    height: 230,
+    height: 214,
     borderRadius: 24,
     overflow: "hidden",
     backgroundColor: palette.panel,
@@ -1890,8 +2108,9 @@ const styles = StyleSheet.create({
     left: 14,
     right: 14,
     bottom: 16,
-    borderRadius: 28,
-    padding: 10,
+    borderRadius: 24,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     flexDirection: "row",
     justifyContent: "space-between",
     borderWidth: 1,
@@ -1903,12 +2122,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 54,
-    borderRadius: 20,
+    minHeight: 48,
+    borderRadius: 18,
   },
   tabButtonActive: {
-    minHeight: 54,
-    borderRadius: 20,
+    minHeight: 48,
+    borderRadius: 18,
     paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
@@ -1917,13 +2136,13 @@ const styles = StyleSheet.create({
   },
   tabButtonText: {
     color: palette.subText,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "600",
-    marginTop: 4,
+    marginTop: 2,
   },
   tabButtonActiveText: {
     color: palette.bg,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
   },
   ratingBadge: {

@@ -10,6 +10,7 @@ type Props = {
   html: string;
   frameId: string;
   selectedSpotId?: string | null;
+  userLocation?: [number, number] | null;
   onSelectSpot: (spotId: string) => void;
   onTilesReady: () => void;
 };
@@ -36,6 +37,7 @@ export default function SharedMapFrame({
   html,
   frameId,
   selectedSpotId,
+  userLocation,
   onSelectSpot,
   onTilesReady,
 }: Props) {
@@ -43,11 +45,25 @@ export default function SharedMapFrame({
 
   function syncSelectedSpot(spotId?: string | null) {
     const frameWindow = iframeRef.current?.contentWindow as
-      | (Window & { __setSelectedSpot?: (nextSpotId: string | null) => void })
+      | (Window & {
+          __setSelectedSpot?: (nextSpotId: string | null) => void;
+          __focusUserLocation?: (coords: [number, number]) => void;
+        })
       | null;
 
     if (!frameWindow?.__setSelectedSpot) return;
     frameWindow.__setSelectedSpot(spotId ?? null);
+  }
+
+  function focusUserLocation(coords?: [number, number] | null) {
+    const frameWindow = iframeRef.current?.contentWindow as
+      | (Window & {
+          __focusUserLocation?: (nextCoords: [number, number]) => void;
+        })
+      | null;
+
+    if (!coords || !frameWindow?.__focusUserLocation) return;
+    frameWindow.__focusUserLocation(coords);
   }
 
   useEffect(() => {
@@ -75,12 +91,19 @@ export default function SharedMapFrame({
     syncSelectedSpot(selectedSpotId);
   }, [selectedSpotId]);
 
+  useEffect(() => {
+    focusUserLocation(userLocation);
+  }, [userLocation]);
+
   return (
     <iframe
       ref={iframeRef}
       title="泉州地图"
       srcDoc={html}
-      onLoad={() => syncSelectedSpot(selectedSpotId)}
+      onLoad={() => {
+        syncSelectedSpot(selectedSpotId);
+        focusUserLocation(userLocation);
+      }}
       style={iframeStyle}
     />
   );

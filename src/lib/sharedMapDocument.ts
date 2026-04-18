@@ -103,33 +103,10 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
       }
 
-      .quanzhou-map-tooltip {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        padding: 8px 10px;
-        color: #f4f7fb;
-        background: rgba(9, 21, 36, 0.9);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        border-radius: 12px;
-        backdrop-filter: blur(16px);
-      }
-
-      .quanzhou-map-tooltip strong {
-        font-size: 13px;
-        line-height: 1.3;
-      }
-
-      .quanzhou-map-tooltip span {
-        color: #a9bfd7;
-        font-size: 12px;
-        line-height: 1.4;
-      }
-
       .quanzhou-route-marker.is-active,
       .quanzhou-extra-marker.is-active,
       .quanzhou-city-marker.is-active {
-        transform: scale(1.22);
+        transform: scale(1.14);
         box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.14), 0 10px 24px rgba(0, 0, 0, 0.28);
       }
 
@@ -153,19 +130,19 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
 
       @media (max-width: 640px) {
         .quanzhou-route-marker {
-          width: 24px;
-          height: 24px;
-          font-size: 10px;
+          width: 22px;
+          height: 22px;
+          font-size: 9px;
         }
 
         .quanzhou-extra-marker {
-          width: 10px;
-          height: 10px;
+          width: 9px;
+          height: 9px;
         }
 
         .quanzhou-city-marker {
-          width: 8px;
-          height: 8px;
+          width: 7px;
+          height: 7px;
         }
       }
     </style>
@@ -190,6 +167,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
         zoomControl: false,
         attributionControl: true,
       }).setView(data.routeCoords[0] || [24.9149599, 118.5880777], 13);
+      let userMarker = null;
 
       const tileLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
         attribution:
@@ -198,12 +176,6 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
 
       tileLayer.on("load", () => notify({ type: "tilesReady" }));
       tileLayer.addTo(map);
-
-      function tooltipHtml(title, subtitle) {
-        return '<div class="quanzhou-map-tooltip"><strong>' + title + '</strong>' +
-          (subtitle ? '<span>' + subtitle + '</span>' : '') +
-          '</div>';
-      }
 
       function makeDivIcon(html, size, anchor) {
         return L.divIcon({
@@ -253,14 +225,20 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
               interactive: false,
             }).addTo(map);
 
-            if (marker.getTooltip()) marker.openTooltip();
-          } else if (marker.getTooltip()) {
-            marker.closeTooltip();
           }
         });
       }
 
       window.__setSelectedSpot = setActiveSpot;
+      window.__focusUserLocation = function(coords) {
+        if (!coords || !Array.isArray(coords) || coords.length < 2) return;
+        map.setView(coords, Math.max(map.getZoom(), 15), {
+          animate: true,
+        });
+        if (userMarker) {
+          userMarker.setLatLng(coords);
+        }
+      };
 
       window.addEventListener("message", (event) => {
         const next = event.data;
@@ -285,10 +263,6 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
           .on("click", () => {
             setActiveSpot(spot.id);
             notify({ type: "selectSpot", spotId: spot.id });
-          })
-          .bindTooltip(tooltipHtml((index + 1) + ". " + spot.name, spot.subtitle || ""), {
-            direction: "top",
-            offset: [0, -8],
           });
 
         markersById.set(spot.id, { marker, kind: "route", spot });
@@ -302,10 +276,6 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
           .on("click", () => {
             setActiveSpot(spot.id);
             notify({ type: "selectSpot", spotId: spot.id });
-          })
-          .bindTooltip(tooltipHtml(spot.name, "古城补点"), {
-            direction: "top",
-            offset: [0, -8],
           });
 
         markersById.set(spot.id, { marker, kind: "extra", spot });
@@ -319,24 +289,15 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
           .on("click", () => {
             setActiveSpot(spot.id);
             notify({ type: "selectSpot", spotId: spot.id });
-          })
-          .bindTooltip(tooltipHtml(spot.name, "全域点位"), {
-            direction: "top",
-            offset: [0, -8],
           });
 
         markersById.set(spot.id, { marker, kind: "city", spot });
       });
 
       if (data.userLocation) {
-        L.marker(data.userLocation, {
+        userMarker = L.marker(data.userLocation, {
           icon: makeDivIcon('<div class="quanzhou-user-marker"></div>', [14, 14], [7, 7]),
-        })
-          .addTo(map)
-          .bindTooltip(tooltipHtml("你的位置", "定位参考"), {
-            direction: "top",
-            offset: [0, -8],
-          });
+        }).addTo(map);
       }
 
       const visibleCoords = [...data.routeSpots, ...data.extraSpots, ...data.citySpots]

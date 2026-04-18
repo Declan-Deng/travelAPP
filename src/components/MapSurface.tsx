@@ -92,6 +92,7 @@ export default function MapSurface({
           html={html}
           frameId={frameId}
           selectedSpotId={selectedSpotId}
+          userLocation={userLocation}
           onSelectSpot={onSelectSpot}
           onTilesReady={() => setTilesReady(true)}
         />
@@ -224,6 +225,7 @@ function ChipButton({
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
+    minHeight: 0,
     borderRadius: 28,
     overflow: "hidden",
     borderWidth: 1,
@@ -232,7 +234,7 @@ const styles = StyleSheet.create({
   },
   mapCanvas: {
     flex: 1,
-    minHeight: 620,
+    minHeight: 0,
     position: "relative",
   },
   loadingMask: {
@@ -258,7 +260,7 @@ const styles = StyleSheet.create({
   },
   topOverlay: {
     position: "absolute",
-    top: 14,
+    top: 12,
     left: 14,
     right: 14,
     zIndex: 20,
@@ -266,9 +268,9 @@ const styles = StyleSheet.create({
   },
   legendCard: {
     alignSelf: "flex-start",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     overflow: "hidden",
@@ -279,14 +281,14 @@ const styles = StyleSheet.create({
   },
   legendKicker: {
     color: "#f9dc7b",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
   legendTitle: {
     color: "#f4f7fb",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
     marginTop: 2,
   },
@@ -298,7 +300,7 @@ const styles = StyleSheet.create({
     pointerEvents: "box-none" as any,
   },
   dockCard: {
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     overflow: "hidden",
@@ -309,22 +311,22 @@ const styles = StyleSheet.create({
   },
   dockMain: {
     flexDirection: "row",
-    gap: 12,
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 10,
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 8,
     alignItems: "flex-start",
   },
   dockImage: {
-    width: 84,
-    height: 84,
-    borderRadius: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
   dockBody: {
     flex: 1,
-    gap: 6,
+    gap: 4,
   },
   badgeRow: {
     flexDirection: "row",
@@ -333,8 +335,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   kindBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 999,
     backgroundColor: "rgba(126, 220, 208, 0.12)",
     borderWidth: 1,
@@ -342,7 +344,7 @@ const styles = StyleSheet.create({
   },
   kindBadgeText: {
     color: "#7edcd0",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
   },
   ratingBadge: {
@@ -352,12 +354,12 @@ const styles = StyleSheet.create({
   },
   ratingLabel: {
     color: "#a9bfd7",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "600",
   },
   ratingValue: {
     color: "#f9dc7b",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
   },
   titleRow: {
@@ -367,14 +369,14 @@ const styles = StyleSheet.create({
   },
   dockTitle: {
     color: "#f4f7fb",
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
     flex: 1,
   },
   dockText: {
     color: "#a9bfd7",
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 17,
   },
   infoRow: {
     flexDirection: "row",
@@ -384,8 +386,8 @@ const styles = StyleSheet.create({
   },
   hoursChip: {
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     backgroundColor: "rgba(126, 220, 208, 0.08)",
     borderWidth: 1,
     borderColor: "rgba(126, 220, 208, 0.18)",
@@ -393,20 +395,20 @@ const styles = StyleSheet.create({
   },
   hoursChipText: {
     color: "#7edcd0",
-    fontSize: 12,
+    fontSize: 11,
   },
   actionRow: {
     flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    flexWrap: "wrap",
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
   },
   chipButton: {
-    minHeight: 36,
+    flex: 1,
+    minHeight: 34,
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     backgroundColor: "rgba(255,255,255,0.06)",
@@ -424,7 +426,7 @@ const styles = StyleSheet.create({
   chipButtonText: {
     color: "#f4f7fb",
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   chipButtonTextActive: {
     color: "#7edcd0",

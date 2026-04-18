@@ -12,6 +12,7 @@ type Props = {
   html: string;
   frameId: string;
   selectedSpotId?: string | null;
+  userLocation?: [number, number] | null;
   onSelectSpot: (spotId: string) => void;
   onTilesReady: () => void;
 };
@@ -20,6 +21,7 @@ export default function SharedMapFrame({
   html,
   frameId,
   selectedSpotId,
+  userLocation,
   onSelectSpot,
   onTilesReady,
 }: Props) {
@@ -33,9 +35,22 @@ export default function SharedMapFrame({
     );
   }
 
+  function focusUserLocation(coords?: [number, number] | null) {
+    if (!coords) return;
+    webViewRef.current?.injectJavaScript(
+      `window.__focusUserLocation && window.__focusUserLocation(${JSON.stringify(
+        coords
+      )}); true;`
+    );
+  }
+
   useEffect(() => {
     syncSelectedSpot(selectedSpotId);
   }, [selectedSpotId]);
+
+  useEffect(() => {
+    focusUserLocation(userLocation);
+  }, [userLocation]);
 
   return (
     <WebView
@@ -48,7 +63,10 @@ export default function SharedMapFrame({
       showsVerticalScrollIndicator={false}
       showsHorizontalScrollIndicator={false}
       setBuiltInZoomControls={false}
-      onLoadEnd={() => syncSelectedSpot(selectedSpotId)}
+      onLoadEnd={() => {
+        syncSelectedSpot(selectedSpotId);
+        focusUserLocation(userLocation);
+      }}
       onMessage={(event) => {
         let payload: SharedMapMessage | null = null;
 
