@@ -17,6 +17,7 @@ type Props = {
   mapMode: "route" | "focus" | "all";
   mapTitle: string;
   mapKicker: string;
+  showDock?: boolean;
   bottomInset?: number;
   routeSpots: Spot[];
   extraSpots: Spot[];
@@ -38,6 +39,7 @@ export default function MapSurface({
   mapMode,
   mapTitle,
   mapKicker,
+  showDock = true,
   bottomInset = 0,
   routeSpots,
   extraSpots,
@@ -119,71 +121,73 @@ export default function MapSurface({
           </View>
         </View>
 
-        <View style={[styles.bottomOverlay, { bottom: 14 + bottomInset }]}>
-          <View style={styles.dockCard}>
-            <LinearGradient
-              colors={["rgba(126, 220, 208, 0.28)", "rgba(255, 183, 107, 0.16)", "rgba(122, 182, 255, 0.06)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.dockGlow}
-            />
-            <Pressable
-              style={styles.dockMain}
-              onPress={() => selectedSpot?.id && onOpenDetail(selectedSpot.id)}
-            >
-              <Image
-                source={getImageSource(selectedSpot?.id)}
-                style={styles.dockImage}
+        {showDock && (
+          <View style={[styles.bottomOverlay, { bottom: 14 + bottomInset }]}>
+            <View style={styles.dockCard}>
+              <LinearGradient
+                colors={["rgba(126, 220, 208, 0.28)", "rgba(255, 183, 107, 0.16)", "rgba(122, 182, 255, 0.06)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.dockGlow}
               />
-              <View style={styles.dockBody}>
-                <View style={styles.badgeRow}>
-                  <View style={styles.kindBadge}>
-                    <Text style={styles.kindBadgeText}>{selectedKind}</Text>
-                  </View>
-                  <View style={styles.ratingBadge}>
-                    <Text style={styles.ratingLabel}>导览</Text>
-                    <Text style={styles.ratingValue}>
-                      {getSpotRating(selectedSpot?.id).toFixed(1)}★
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.titleRow}>
-                  <Text numberOfLines={1} style={styles.dockTitle}>
-                    {selectedSpot?.name || "香港"}
-                  </Text>
-                </View>
-                <Text numberOfLines={2} style={styles.dockText}>
-                  {getSpotIntro(selectedSpot) || "点地图上的标记查看景点。"}
-                </Text>
-                <View style={styles.infoRow}>
-                  <View style={styles.hoursChip}>
-                    <Text numberOfLines={1} style={styles.hoursChipText}>
-                      开放参考：{getSpotOpenHours(selectedSpot?.id)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </Pressable>
-
-            <View style={styles.actionRow}>
-              <ChipButton
-                label="路线"
-                onPress={onFocusRoute}
-                active={mapMode === "route"}
-              />
-              <ChipButton
-                label="全域"
-                onPress={onFocusAllCity}
-                active={mapMode === "all"}
-              />
-              <ChipButton
-                label="详情"
+              <Pressable
+                style={styles.dockMain}
                 onPress={() => selectedSpot?.id && onOpenDetail(selectedSpot.id)}
-                primary
-              />
+              >
+                <Image
+                  source={getImageSource(selectedSpot?.id)}
+                  style={styles.dockImage}
+                />
+                <View style={styles.dockBody}>
+                  <View style={styles.badgeRow}>
+                    <View style={styles.kindBadge}>
+                      <Text style={styles.kindBadgeText}>{selectedKind}</Text>
+                    </View>
+                    <View style={styles.ratingBadge}>
+                      <Text style={styles.ratingLabel}>导览</Text>
+                      <Text style={styles.ratingValue}>
+                        {getSpotRating(selectedSpot?.id).toFixed(1)}★
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.titleRow}>
+                    <Text numberOfLines={1} style={styles.dockTitle}>
+                      {selectedSpot?.name || "香港"}
+                    </Text>
+                  </View>
+                  <Text numberOfLines={2} style={styles.dockText}>
+                    {getSpotIntro(selectedSpot) || "点地图上的标记查看景点。"}
+                  </Text>
+                  <View style={styles.infoRow}>
+                    <View style={styles.hoursChip}>
+                      <Text numberOfLines={1} style={styles.hoursChipText}>
+                        开放参考：{getSpotOpenHours(selectedSpot?.id)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </Pressable>
+
+              <View style={styles.actionRow}>
+                <ChipButton
+                  label="路线"
+                  onPress={onFocusRoute}
+                  active={mapMode === "route"}
+                />
+                <ChipButton
+                  label="全域"
+                  onPress={onFocusAllCity}
+                  active={mapMode === "all"}
+                />
+                <ChipButton
+                  label="详情"
+                  onPress={() => selectedSpot?.id && onOpenDetail(selectedSpot.id)}
+                  primary
+                />
+              </View>
             </View>
           </View>
-        </View>
+        )}
       </View>
     </View>
   );

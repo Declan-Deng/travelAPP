@@ -68,7 +68,6 @@ const palette = {
 };
 
 const uiCopy = {
-  appSubtitle: "1 日、3 日、5 日路线与全港景点",
   routeMapTitle: "香港一日游",
   routeMapKicker: "经典路线",
   allCityTitle: "香港全域景点",
@@ -78,15 +77,13 @@ const uiCopy = {
   mapHintRoute: "地图会显示当前路线、顺路景点和其他片区的香港点位。",
   mapHintFocus: "地图已切到当前景点或专题。",
   searchEmpty: "没有找到相关景点，可试试“中环”“维港”“海边”“离岛”“博物馆”。",
-  extendTitle: "香港还能怎么排",
-  extendNote: "先看主题推荐，再看替代路线，最后按片区筛景点。",
   extendIndex: "区域索引",
   extendLp: "主题推荐",
   extendGuide: "替代路线",
   extendMapAction: "在地图查看",
   guideKicker: "图册与信息",
-  guideTitle: "路线图册、时间与出发信息",
-  guideNote: "当前会跟着你选中的 1 日 / 3 日 / 5 日路线一起切换。",
+  guideTitle: "图册、时间与出发信息",
+  guideNote: "图册、故事线和出发信息都收在这里。",
 };
 
 const glyphMap: Record<string, string> = {
@@ -111,6 +108,14 @@ const glyphMap: Record<string, string> = {
 
 type TabKey = "route" | "map" | "extend" | "guide";
 type ExtendView = "index" | "lp" | "guide";
+type RouteLayerKey =
+  | "schedule"
+  | "logic"
+  | "stops"
+  | "gallery"
+  | "story"
+  | "prep"
+  | "sources";
 
 type GeoError = {
   code?: number;
@@ -234,15 +239,20 @@ function App() {
   const { width: screenWidth } = useWindowDimensions();
   const contentWidth = Math.max(screenWidth - 32, 280);
   const regionCardWidth = Math.max(Math.floor((contentWidth - 12) / 2), 132);
-  const galleryCardWidth = contentWidth;
   const routeOptionWidth = Math.max(Math.min(contentWidth * 0.68, 224), 174);
-  const scheduleCardWidth = Math.max(Math.min(contentWidth * 0.8, 268), 214);
+  const routeRailCardWidth = Math.max(Math.min(contentWidth * 0.78, 286), 236);
+  const layerCardWidth = Math.max(Math.floor((contentWidth - 12) / 2), 150);
+  const extendPreviewWidth = Math.max(Math.min(contentWidth * 0.76, 272), 224);
   const tabBarBottom = Math.max(14, insets.bottom + 8);
-  const tabBarHeight = 74;
+  const tabBarHeight = 66;
   const tabBarReservedSpace = tabBarBottom + tabBarHeight + 12;
   const [currentTab, setCurrentTab] = useState<TabKey>("route");
   const [routeId, setRouteId] = useState<string>(recommendedRoute.id);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [extendView, setExtendView] = useState<ExtendView>("index");
+  const [extendLayer, setExtendLayer] = useState<ExtendView | null>(null);
+  const [showRoutePicker, setShowRoutePicker] = useState(true);
+  const [routeLayer, setRouteLayer] = useState<RouteLayerKey | null>(null);
   const currentRoute = useMemo(
     () => routes.find((route: any) => route.id === routeId) || routes[0],
     [routeId]
@@ -255,6 +265,23 @@ function App() {
     () => routeStops.map((spot: any) => spot.coords as [number, number]).filter(Boolean),
     [routeStops]
   );
+  const routeDayGroups = useMemo(() => {
+    const totalStops = routeStops.length;
+    const totalDays = Math.max(currentRoute.schedule.length, 1);
+
+    return currentRoute.schedule.map((item: any, index: number) => {
+      const start = Math.round((index * totalStops) / totalDays);
+      const end = Math.round(((index + 1) * totalStops) / totalDays);
+      const spots = routeStops.slice(start, Math.max(start + 1, end));
+
+      return {
+        ...item,
+        index,
+        spots,
+      };
+    });
+  }, [currentRoute, routeStops]);
+  const activeDayGroup = routeDayGroups[selectedDayIndex] || routeDayGroups[0] || null;
   const extraOldCitySpots = useMemo(
     () =>
       Object.values(places).filter(
@@ -314,8 +341,27 @@ function App() {
     [searchQuery]
   );
 
+  const extendSummary = useMemo(
+    () => ({
+      index: {
+        title: selectedRegion.title,
+        note: `${selectedRegion.spots.length} 个景点，先按区域选一块再进入列表。`,
+      },
+      lp: {
+        title: "主题推荐",
+        note: `${lonelyPlanetHighlights.length} 组主题，适合先定兴趣，再开地图。`,
+      },
+      guide: {
+        title: "替代路线",
+        note: `${cityRecommendations.length} 组替代方案，适合按旅行风格另起一条线。`,
+      },
+    }),
+    [selectedRegion]
+  );
+
   useEffect(() => {
     setSelectedSpotId(currentRoute.stops[0]);
+    setSelectedDayIndex(0);
     if (mapMode === "route") {
       setFocusedSpotIds(currentRoute.stops);
       setMapTitle(currentRoute.label);
@@ -395,6 +441,81 @@ function App() {
     setMapTitle(title);
     setMapKicker(kicker);
   }
+
+  function chooseRoute(nextRouteId: string) {
+    setRouteId(nextRouteId);
+    setShowRoutePicker(false);
+  }
+
+  function openRouteLayer(nextLayer: RouteLayerKey) {
+    setRouteLayer(nextLayer);
+  }
+
+  const routeLayerEntries = useMemo(
+    () => [
+      {
+        key: "schedule" as RouteLayerKey,
+        kicker: "先扫节奏",
+        title: "每日安排",
+        note: `${currentRoute.schedule.length} 段，先看每天怎么排`,
+      },
+      {
+        key: "logic" as RouteLayerKey,
+        kicker: "看懂路线",
+        title: "路线逻辑",
+        note: `${currentRoute.panels.length} 个判断，帮你快速理解这条线`,
+      },
+      {
+        key: "stops" as RouteLayerKey,
+        kicker: "往下细看",
+        title: "站点清单",
+        note: `${routeStops.length} 站，评级、开放参考和地图入口都在里面`,
+      },
+      {
+        key: "prep" as RouteLayerKey,
+        kicker: "出发前",
+        title: "出发信息",
+        note: "把准备事项、开放时间说明和评级口径收在一起",
+      },
+    ],
+    [currentRoute, routeStops.length]
+  );
+
+  const guideLayerEntries = useMemo(
+    () => [
+      {
+        key: "gallery" as RouteLayerKey,
+        kicker: "看画面",
+        title: "图册亮点",
+        note: `${galleryItems.length} 组画面，适合先建立这条线的气质`,
+      },
+      {
+        key: "story" as RouteLayerKey,
+        kicker: "看叙事",
+        title: "路线故事线",
+        note: `${currentRoute.chapters.length} 段，解释为什么这样走`,
+      },
+      {
+        key: "prep" as RouteLayerKey,
+        kicker: "看准备",
+        title: "出发信息",
+        note: `${currentRoute.prep.length} 条提醒，减少临时改计划`,
+      },
+      {
+        key: "sources" as RouteLayerKey,
+        kicker: "看出处",
+        title: "资料来源",
+        note: "把这次路线用到的公开资料和本地素材集中放在一层",
+      },
+    ],
+    [currentRoute]
+  );
+
+  const extendPreviewItems = useMemo(() => {
+    if (extendView === "lp") return lonelyPlanetHighlights.slice(0, 4);
+    if (extendView === "guide") return cityRecommendations.slice(0, 4);
+    return [];
+  }, [extendView]);
 
   async function locateUser() {
     async function withTimeout<T>(
@@ -609,204 +730,209 @@ function App() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <GlassCard style={styles.plannerCard}>
-          <View style={styles.plannerHead}>
-            <Text style={styles.sectionEyebrow}>先定天数</Text>
-            <Text style={styles.plannerTitle}>先决定这趟香港打算玩几天</Text>
-            <Text style={styles.sectionHint}>
-              选中后会同步切换路线说明、每日安排、站点列表和地图焦点。
-            </Text>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            decelerationRate="fast"
-            snapToAlignment="start"
-            snapToInterval={routeOptionWidth + 12}
-            contentContainerStyle={styles.routeOptionRow}
-          >
-            {routes.map((route: any) => (
-              <Pressable
-                key={route.id}
-                style={[
-                  styles.routeOptionCard,
-                  { width: routeOptionWidth },
-                  routeId === route.id && styles.routeOptionCardActive,
-                ]}
-                onPress={() => setRouteId(route.id)}
-              >
-                <View style={styles.routeOptionTop}>
-                  <Text
-                    style={[
-                      styles.routeOptionDays,
-                      routeId === route.id && styles.routeOptionDaysActive,
-                    ]}
-                  >
-                    {route.days}
-                  </Text>
-                  <View
-                    style={[
-                      styles.routeOptionBadge,
-                      routeId === route.id && styles.routeOptionBadgeActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.routeOptionBadgeText,
-                        routeId === route.id && styles.routeOptionBadgeTextActive,
-                      ]}
-                    >
-                      {route.label}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.routeOptionTitle}>{route.fit}</Text>
-                <Text style={styles.routeOptionNote}>{route.note}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </GlassCard>
-
-        <LinearGradient
-          colors={["rgba(122, 182, 255, 0.28)", "rgba(255, 141, 114, 0.1)"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroCard}
-        >
-          <Image
-            source={getCitywalkImage(currentRoute.heroImage)}
-            style={styles.heroImage}
-          />
-          <View style={styles.heroShade} />
-          <View style={styles.heroContent}>
-            <View style={styles.heroEyebrowRow}>
-              <GlassPill icon="walk-outline" label={currentRoute.badge} />
-              <GlassPill
-                icon="time-outline"
-                label={currentRoute.note || currentRoute.days}
-              />
-            </View>
-            <Text style={styles.heroTitle}>{currentRoute.headline}</Text>
-            <Text style={styles.heroText}>{currentRoute.lead}</Text>
-            <View style={styles.heroStatsRow}>
-              <StatChip label="站点" value={`${currentRoute.stops.length} 站`} />
-              <StatChip label="方式" value={currentRoute.mode} />
-              <StatChip label="适合" value={currentRoute.fit} />
-            </View>
-            <View style={styles.heroActionRow}>
-              <ActionButton
-                icon="map-outline"
-                label="直接看地图"
-                onPress={focusRoute}
-                primary
-              />
-              <ActionButton
-                icon="compass-outline"
-                label="查看全域景点"
-                onPress={focusAllCity}
-              />
-            </View>
-          </View>
-        </LinearGradient>
-
         <SectionTitle
-          kicker="每日安排"
-          title="先看每天的大致节奏"
-          note="这一步最像真正安排行程，先扫一遍，再决定哪些站点要深看。"
+          kicker="先定天数"
+          title="先决定这次香港怎么玩"
+          note="先选天数，再往下看。"
         />
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.routeModeRow}
+        >
+          {routes.map((route: any) => (
+            <Pressable
+              key={route.id}
+              style={[
+                styles.routeModeChip,
+                routeId === route.id && styles.routeModeChipActive,
+              ]}
+              onPress={() => chooseRoute(route.id)}
+            >
+              <Text
+                style={[
+                  styles.routeModeChipDays,
+                  routeId === route.id && styles.routeModeChipDaysActive,
+                ]}
+              >
+                {route.days}
+              </Text>
+              <Text
+                style={[
+                  styles.routeModeChipText,
+                  routeId === route.id && styles.routeModeChipTextActive,
+                ]}
+              >
+                {route.label}
+              </Text>
+            </Pressable>
+          ))}
+          <Pressable
+            style={styles.routeModeMoreButton}
+            onPress={() => setShowRoutePicker(true)}
+          >
+            <Glyph name="apps-outline" size={16} color={palette.text} />
+            <Text style={styles.routeModeMoreText}>全部方案</Text>
+          </Pressable>
+        </ScrollView>
 
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           decelerationRate="fast"
           snapToAlignment="start"
-          snapToInterval={scheduleCardWidth + 12}
-          contentContainerStyle={styles.scheduleRow}
+          snapToInterval={routeRailCardWidth + 14}
+          contentContainerStyle={styles.routeRail}
         >
-          {currentRoute.schedule.map((item: any) => (
-            <View
-              key={item.phase}
-              style={[styles.tripDayCard, { width: scheduleCardWidth }]}
+          {routes.map((route: any) => (
+            <Pressable
+              key={route.id}
+              style={[
+                styles.routeShowcaseCard,
+                { width: routeRailCardWidth },
+                route.id === routeId && styles.routeShowcaseCardActive,
+              ]}
+              onPress={() => chooseRoute(route.id)}
             >
-              <View style={styles.tripDayTop}>
-                <Text style={styles.tripDayPhase}>{item.phase}</Text>
-                <Text style={styles.tripDayDot}>•</Text>
-                <Text style={styles.tripDayMode}>{currentRoute.mode}</Text>
+              <Image
+                source={getCitywalkImage(route.heroImage)}
+                style={styles.routeShowcaseImage}
+              />
+              <LinearGradient
+                colors={["transparent", "rgba(6,17,29,0.92)"]}
+                style={styles.routeShowcaseShade}
+              />
+              <View style={styles.routeShowcaseBody}>
+                <View style={styles.heroEyebrowRow}>
+                  <GlassPill icon="walk-outline" label={route.badge} />
+                </View>
+                <Text numberOfLines={2} style={styles.routeShowcaseTitle}>
+                  {route.headline}
+                </Text>
+                <Text numberOfLines={2} style={styles.routeShowcaseText}>
+                  {route.lead}
+                </Text>
+                <View style={styles.heroStatsRow}>
+                  <StatChip label="站点" value={`${route.stops.length} 站`} />
+                  <StatChip label="方式" value={route.mode} />
+                </View>
               </View>
-              <Text style={styles.tripDayTitle}>{item.title}</Text>
-              <Text style={styles.tripDayBody}>{item.body}</Text>
-            </View>
+            </Pressable>
           ))}
         </ScrollView>
 
-        <SectionTitle
-          kicker="路线逻辑"
-          title={uiCopy.routeLogicTitle}
-          note={uiCopy.routeLogicNote}
-        />
-
-        <View style={styles.cardGrid}>
-          {currentRoute.panels.map((panel: any) => (
-            <GlassCard key={panel.title} style={styles.logicCard}>
-              <Text style={styles.logicTitle}>{panel.title}</Text>
-              <Text style={styles.cardText}>{panel.body}</Text>
-            </GlassCard>
-          ))}
-        </View>
-
-        <SectionTitle
-          kicker="行程站点"
-          title="按这条路线往下走"
-          note="每一站都带评级、开放参考和地图入口。"
-        />
-
-        <View style={styles.stopsWrap}>
-          {routeStops.map((spot: any, index: number) => (
-            <Pressable
-              key={spot.id}
-              style={styles.stopCard}
-              onPress={() => setDetailSpotId(spot.id)}
-            >
-              <Image
-                source={getCitywalkImage(getSpotImageKey(spot.id))}
-                style={styles.stopImage}
-              />
-              <View style={styles.stopBody}>
-                <View style={styles.rowBetween}>
-                  <View style={styles.stopTitleWrap}>
-                    <View style={styles.stopIndex}>
-                      <Text style={styles.stopIndexText}>
-                        {String(index + 1).padStart(2, "0")}
-                      </Text>
-                    </View>
-                    <Text style={styles.stopTitle}>{spot.name}</Text>
-                  </View>
-                  <RatingBadge score={getSpotRating(spot.id)} compact />
-                </View>
-                <Text numberOfLines={2} style={styles.stopSubtitle}>
-                  {spot.subtitle}
+        {activeDayGroup && (
+          <GlassCard style={styles.dayPlannerCard}>
+            <View style={styles.currentRouteHead}>
+              <View style={styles.currentRouteCopy}>
+                <Text style={styles.sectionEyebrow}>按天看节奏</Text>
+                <Text style={styles.currentRouteTitle}>
+                  {activeDayGroup.phase} · {activeDayGroup.title}
                 </Text>
-                <View style={styles.metaRow}>
-                  <MetaPill icon="time-outline" text={getSpotDuration(spot) || "现场调整"} />
-                  <MetaPill icon="sunny-outline" text={getSpotOpenHours(spot.id)} />
-                  <MetaPill
-                    icon="trail-sign-outline"
-                    text={spot.area || spot.theme || inferSpotCategory(spot)}
-                  />
-                </View>
-                <View style={styles.stopActionRow}>
-                  <MiniButton
-                    icon="document-text-outline"
-                    label="看详情"
-                    onPress={() => setDetailSpotId(spot.id)}
-                  />
-                  <MiniButton
-                    icon="location-outline"
-                    label="地图定位"
+                <Text style={styles.sectionHint}>
+                  {activeDayGroup.spots.length} 站 · {currentRoute.mode}
+                </Text>
+              </View>
+              <Pressable
+                style={styles.layerActionButton}
+                onPress={() => openRouteLayer("schedule")}
+              >
+                <Glyph name="reader-outline" size={16} color={palette.text} />
+                <Text style={styles.layerActionButtonText}>看完整安排</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dayChipRow}
+            >
+              {routeDayGroups.map((item: any) => (
+                <Pressable
+                  key={`${currentRoute.id}-${item.index}`}
+                  style={[
+                    styles.dayChip,
+                    selectedDayIndex === item.index && styles.dayChipActive,
+                  ]}
+                  onPress={() => setSelectedDayIndex(item.index)}
+                >
+                  <Text
+                    style={[
+                      styles.dayChipPhase,
+                      selectedDayIndex === item.index && styles.dayChipPhaseActive,
+                    ]}
+                  >
+                    {item.phase}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.dayChipTitle,
+                      selectedDayIndex === item.index && styles.dayChipTitleActive,
+                    ]}
+                  >
+                    {item.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <View style={styles.daySummaryCard}>
+              <Text style={styles.daySummaryTitle}>{activeDayGroup.title}</Text>
+              <Text style={styles.cardText}>{activeDayGroup.body}</Text>
+              <View style={styles.daySpotTagRow}>
+                {activeDayGroup.spots.map((spot: any) => (
+                  <Pressable
+                    key={spot.id}
+                    style={styles.daySpotTag}
                     onPress={() => focusSpot(spot.id)}
-                  />
-                </View>
+                  >
+                    <Text style={styles.daySpotTagText}>{spot.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={styles.heroActionRow}>
+                <ActionButton
+                  icon="map-outline"
+                  label="地图看这一天"
+                  onPress={() =>
+                    focusCollection(
+                      activeDayGroup.spots.map((spot: any) => spot.id),
+                      activeDayGroup.title,
+                      activeDayGroup.phase
+                    )
+                  }
+                  primary
+                />
+                <ActionButton
+                  icon="document-text-outline"
+                  label="看站点清单"
+                  onPress={() => openRouteLayer("stops")}
+                />
+              </View>
+            </View>
+          </GlassCard>
+        )}
+
+        <SectionTitle
+          kicker="继续查看"
+          title="从四个入口继续看"
+          note="安排、逻辑、站点、出发信息分开看。"
+        />
+
+        <View style={styles.layerEntryGridWide}>
+          {routeLayerEntries.map((item) => (
+            <Pressable
+              key={item.key}
+              style={[styles.layerEntryCard, { width: layerCardWidth }]}
+              onPress={() => openRouteLayer(item.key)}
+            >
+              <Text style={styles.layerEntryKicker}>{item.kicker}</Text>
+              <Text style={styles.layerEntryTitle}>{item.title}</Text>
+              <Text style={styles.layerEntryNote}>{item.note}</Text>
+              <View style={styles.layerEntryFooter}>
+                <Text style={styles.layerEntryAction}>进入查看</Text>
+                <Glyph name="navigate-outline" size={16} color={palette.gold} />
               </View>
             </Pressable>
           ))}
@@ -817,17 +943,13 @@ function App() {
 
   function renderMapTab() {
     return (
-      <View
-          style={[styles.mapTabShell, { paddingBottom: 18 }]}
-        >
+      <View style={[styles.mapTabShell, { paddingBottom: 18 }]}>
         <View style={styles.mapHeader}>
           <View style={styles.mapHeaderCopy}>
             <Text style={styles.sectionEyebrow}>地图与搜索</Text>
-            <Text style={styles.mapHeaderTitle}>{mapTitle}</Text>
+            <Text style={styles.mapHeaderTitle}>{currentRoute.badge}</Text>
             <Text style={styles.sectionHint}>
-              {mapMode === "route"
-                ? uiCopy.mapHintRoute
-                : uiCopy.mapHintFocus}
+              {mapMode === "route" ? uiCopy.mapHintRoute : uiCopy.mapHintFocus}
             </Text>
           </View>
           <View style={styles.mapHeaderActions}>
@@ -849,7 +971,7 @@ function App() {
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="搜索景点、海滨、街区、商圈、离岛或博物馆"
+              placeholder="搜索景点、海滨、街区、离岛或博物馆"
               placeholderTextColor={palette.subText}
               style={styles.searchInput}
             />
@@ -889,28 +1011,126 @@ function App() {
           )}
         </GlassCard>
 
-        <MapSurface
-          routeCoords={routeCoords}
-          mapMode={mapMode}
-          mapTitle={mapTitle}
-          mapKicker={mapKicker}
-          bottomInset={8}
-          routeSpots={mapVisibleSpots.route}
-          extraSpots={mapVisibleSpots.extras}
-          citySpots={mapVisibleSpots.city}
-          selectedSpot={selectedSpot}
-          userLocation={userLocation}
-          onSelectSpot={(spotId: string) => setSelectedSpotId(spotId)}
-          onOpenDetail={(spotId: string) => setDetailSpotId(spotId)}
-          onFocusRoute={focusRoute}
-          onFocusAllCity={focusAllCity}
-          getImageSource={(spotId?: string | null) =>
-            getCitywalkImage(getSpotImageKey(spotId))
-          }
-          getSpotIntro={(spot: any) => getSpotIntro(spot)}
-          getSpotOpenHours={(spotId?: string | null) => getSpotOpenHours(spotId)}
-          getSpotRating={(spotId?: string | null) => getSpotRating(spotId)}
-        />
+        <View style={styles.mapPlannerWrap}>
+          <View style={styles.mapCanvasWrap}>
+            <MapSurface
+              routeCoords={routeCoords}
+              mapMode={mapMode}
+              mapTitle={mapTitle}
+              mapKicker={mapKicker}
+              showDock={false}
+              bottomInset={8}
+              routeSpots={mapVisibleSpots.route}
+              extraSpots={mapVisibleSpots.extras}
+              citySpots={mapVisibleSpots.city}
+              selectedSpot={selectedSpot}
+              userLocation={userLocation}
+              onSelectSpot={(spotId: string) => setSelectedSpotId(spotId)}
+              onOpenDetail={(spotId: string) => setDetailSpotId(spotId)}
+              onFocusRoute={focusRoute}
+              onFocusAllCity={focusAllCity}
+              getImageSource={(spotId?: string | null) =>
+                getCitywalkImage(getSpotImageKey(spotId))
+              }
+              getSpotIntro={(spot: any) => getSpotIntro(spot)}
+              getSpotOpenHours={(spotId?: string | null) => getSpotOpenHours(spotId)}
+              getSpotRating={(spotId?: string | null) => getSpotRating(spotId)}
+            />
+          </View>
+
+          {activeDayGroup && (
+            <GlassCard style={styles.mapPlannerSheet}>
+              <View style={styles.rowBetween}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.featureSource}>{currentRoute.badge}</Text>
+                  <Text style={styles.featureTitle}>{activeDayGroup.title}</Text>
+                  <Text numberOfLines={2} style={styles.cardText}>
+                    {activeDayGroup.body}
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.mapSheetButton}
+                  onPress={() => openRouteLayer("schedule")}
+                >
+                  <Glyph name="reader-outline" size={16} color={palette.text} />
+                </Pressable>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.dayChipRow}
+              >
+                {routeDayGroups.map((item: any) => (
+                  <Pressable
+                    key={`${currentRoute.id}-map-${item.index}`}
+                    style={[
+                      styles.dayChip,
+                      selectedDayIndex === item.index && styles.dayChipActive,
+                    ]}
+                    onPress={() => {
+                      setSelectedDayIndex(item.index);
+                      focusCollection(
+                        item.spots.map((spot: any) => spot.id),
+                        item.title,
+                        item.phase
+                      );
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dayChipPhase,
+                        selectedDayIndex === item.index && styles.dayChipPhaseActive,
+                      ]}
+                    >
+                      {item.phase}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.dayChipTitle,
+                        selectedDayIndex === item.index && styles.dayChipTitleActive,
+                      ]}
+                    >
+                      {item.title}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              <View style={styles.mapSheetTagRow}>
+                {activeDayGroup.spots.slice(0, 4).map((spot: any) => (
+                  <Pressable
+                    key={spot.id}
+                    style={styles.daySpotTag}
+                    onPress={() => focusSpot(spot.id)}
+                  >
+                    <Text style={styles.daySpotTagText}>{spot.name}</Text>
+                  </Pressable>
+                ))}
+                {activeDayGroup.spots.length > 4 && (
+                  <View style={styles.mapSheetMoreTag}>
+                    <Text style={styles.mapSheetMoreTagText}>
+                      +{activeDayGroup.spots.length - 4} 站
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.mapSheetActionRow}>
+                <MiniButton
+                  icon="document-text-outline"
+                  label="看站点"
+                  onPress={() => openRouteLayer("stops")}
+                />
+                <MiniButton
+                  icon="walk-outline"
+                  label="回主线"
+                  onPress={focusRoute}
+                />
+              </View>
+            </GlassCard>
+          )}
+        </View>
       </View>
     );
   }
@@ -926,9 +1146,45 @@ function App() {
       >
         <SectionTitle
           kicker="香港延伸"
-          title={uiCopy.extendTitle}
-          note={uiCopy.extendNote}
+          title="先挑一组，再继续细看"
+          note="上面先选玩法，下面再看区域索引、主题推荐和替代路线。"
         />
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToAlignment="start"
+          snapToInterval={extendPreviewWidth + 12}
+          contentContainerStyle={styles.extendPreviewRow}
+        >
+          {cityRecommendations.slice(0, 4).map((item: any) => (
+            <Pressable
+              key={item.title}
+              style={[styles.extendPreviewCard, { width: extendPreviewWidth }]}
+              onPress={() => {
+                setExtendView("guide");
+                setExtendLayer("guide");
+              }}
+            >
+              <Image
+                source={getCitywalkImage(item.image)}
+                style={styles.extendPreviewImage}
+              />
+              <LinearGradient
+                colors={["transparent", "rgba(6,17,29,0.94)"]}
+                style={styles.routeShowcaseShade}
+              />
+              <View style={styles.extendPreviewBody}>
+                <Text style={styles.featureSource}>{item.area}</Text>
+                <Text style={styles.extendPreviewTitle}>{item.title}</Text>
+                <Text numberOfLines={2} style={styles.extendPreviewText}>
+                  {item.text}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
 
         <ScrollView
           horizontal
@@ -960,200 +1216,152 @@ function App() {
           ))}
         </ScrollView>
 
-        {extendView === "lp" && (
-          <View style={styles.stackGap}>
-            {lonelyPlanetHighlights.map((item: any) => (
-              <GlassCard key={item.title} style={styles.featureCard}>
-                <Image
-                  source={getCitywalkImage(item.image)}
-                  style={styles.featureImage}
-                />
-                <View style={styles.featureBody}>
-                  <Text style={styles.featureSource}>{item.source}</Text>
-                  <Text style={styles.featureTitle}>{item.title}</Text>
-                  <Text style={styles.cardText}>{item.text}</Text>
-                  <TagRow tags={item.chips} />
-                  <ActionButton
-                    icon="map-outline"
-                    label={uiCopy.extendMapAction}
-                    onPress={() =>
-                      focusCollection(item.spotIds, item.title, uiCopy.extendLp)
-                    }
-                    primary
-                  />
-                </View>
-              </GlassCard>
-            ))}
-          </View>
-        )}
-
-        {extendView === "guide" && (
-          <View style={styles.stackGap}>
-            {cityRecommendations.map((item: any) => (
-              <GlassCard key={item.title} style={styles.featureCard}>
-                <Image
-                  source={getCitywalkImage(item.image)}
-                  style={styles.featureImage}
-                />
-                <View style={styles.featureBody}>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.featureTitle}>{item.title}</Text>
-                    <Text style={styles.featureSource}>{item.area}</Text>
-                  </View>
-                  <Text style={styles.cardText}>{item.text}</Text>
-                  <View style={styles.scheduleBox}>
-                    {item.schedule.map((line: string) => (
-                      <Text key={line} style={styles.scheduleLine}>
-                        • {line}
-                      </Text>
-                    ))}
-                  </View>
-                  <ActionButton
-                    icon="map-outline"
-                    label={uiCopy.extendMapAction}
-                    onPress={() => focusCollection(item.spotIds, item.title, uiCopy.extendGuide)}
-                    primary
-                  />
-                </View>
-              </GlassCard>
-            ))}
-          </View>
-        )}
-
         {extendView === "index" && (
-          <View style={styles.stackGap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToAlignment="start"
+            snapToInterval={regionCardWidth + 12}
+            contentContainerStyle={styles.regionRow}
+          >
+            {regionalSpotCollections.map((section: any) => (
+              <Pressable
+                key={section.id}
+                style={[
+                  styles.regionChip,
+                  { width: regionCardWidth },
+                  selectedRegionId === section.id && styles.regionChipActive,
+                ]}
+                onPress={() => {
+                  setSelectedRegionId(section.id);
+                  setSelectedCategory("全部");
+                  setExpandedSpotId(null);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.regionChipTitle,
+                    selectedRegionId === section.id && styles.regionChipTitleActive,
+                  ]}
+                >
+                  {section.title}
+                </Text>
+                <Text style={styles.regionChipMeta}>{section.meta}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+
+        {extendView !== "index" && !!extendPreviewItems.length && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToAlignment="start"
+            snapToInterval={extendPreviewWidth + 12}
+            contentContainerStyle={styles.extendPreviewRow}
+          >
+            {extendPreviewItems.map((item: any) => (
+              <Pressable
+                key={item.title}
+                style={[styles.extendMiniCard, { width: extendPreviewWidth }]}
+                onPress={() => setExtendLayer(extendView)}
+              >
+                <Image
+                  source={getCitywalkImage(item.image)}
+                  style={styles.extendMiniImage}
+                />
+                <View style={styles.extendMiniBody}>
+                  <Text style={styles.featureSource}>
+                    {"source" in item ? item.source : item.area}
+                  </Text>
+                  <Text style={styles.extendMiniTitle}>{item.title}</Text>
+                  <Text numberOfLines={2} style={styles.cardText}>
+                    {item.text}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+
+        <GlassCard style={styles.extendOverviewCard}>
+          <Text style={styles.featureSource}>
+            {extendView === "index"
+              ? uiCopy.extendIndex
+              : extendView === "lp"
+                ? uiCopy.extendLp
+                : uiCopy.extendGuide}
+          </Text>
+          <Text style={styles.featureTitle}>{extendSummary[extendView].title}</Text>
+          <Text style={styles.cardText}>{extendSummary[extendView].note}</Text>
+
+          {extendView === "index" && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              decelerationRate="fast"
-              snapToAlignment="start"
-              snapToInterval={regionCardWidth + 12}
-              contentContainerStyle={styles.regionRow}
+              contentContainerStyle={styles.filterRow}
             >
-              {regionalSpotCollections.map((section: any) => (
+              {regionCategories.map((item) => (
                 <Pressable
-                  key={section.id}
+                  key={item.label}
                   style={[
-                    styles.regionChip,
-                    { width: regionCardWidth },
-                    selectedRegionId === section.id && styles.regionChipActive,
+                    styles.filterChip,
+                    selectedCategory === item.label && styles.filterChipActive,
                   ]}
-                  onPress={() => {
-                    setSelectedRegionId(section.id);
-                    setSelectedCategory("全部");
-                    setExpandedSpotId(null);
-                  }}
+                  onPress={() => setSelectedCategory(item.label)}
                 >
                   <Text
                     style={[
-                      styles.regionChipTitle,
-                      selectedRegionId === section.id && styles.regionChipTitleActive,
+                      styles.filterChipText,
+                      selectedCategory === item.label &&
+                        styles.filterChipTextActive,
                     ]}
                   >
-                    {section.title}
+                    {item.label} {item.count}
                   </Text>
-                  <Text style={styles.regionChipMeta}>{section.meta}</Text>
                 </Pressable>
               ))}
             </ScrollView>
+          )}
 
-            <GlassCard>
-              <Text style={styles.featureTitle}>{selectedRegion.title}</Text>
-              <Text style={styles.cardText}>{selectedRegion.intro}</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterRow}
-              >
-                {regionCategories.map((item) => (
-                  <Pressable
-                    key={item.label}
-                    style={[
-                      styles.filterChip,
-                      selectedCategory === item.label && styles.filterChipActive,
-                    ]}
-                    onPress={() => setSelectedCategory(item.label)}
-                  >
-                    <Text
-                      style={[
-                        styles.filterChipText,
-                        selectedCategory === item.label &&
-                          styles.filterChipTextActive,
-                      ]}
-                    >
-                      {item.label} {item.count}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </GlassCard>
+          <View style={styles.heroActionRow}>
+              <ActionButton
+                icon="document-text-outline"
+                label="查看这一组"
+                onPress={() => setExtendLayer(extendView)}
+                primary
+              />
+            <ActionButton
+              icon="map-outline"
+              label="地图查看"
+              onPress={() => {
+                if (extendView === "index") {
+                  focusCollection(
+                    filteredRegionSpots.map((spot: any) => spot.id),
+                    selectedRegion.title,
+                    uiCopy.extendIndex
+                  );
+                  return;
+                }
 
-            {filteredRegionSpots.map((spot: any) => {
-              const expanded = expandedSpotId === spot.id;
-              return (
-                <GlassCard key={spot.id} style={styles.indexCard}>
-                  <Pressable
-                    style={styles.indexHead}
-                    onPress={() =>
-                      setExpandedSpotId(expanded ? null : spot.id)
-                    }
-                  >
-                    <View style={styles.indexHeadMain}>
-                      <Text style={styles.indexTitle}>{spot.name}</Text>
-                        <Text style={styles.indexMeta}>
-                        {inferSpotCategory(spot)} · {getDistanceFromCenter(spot.coords)}
-                        </Text>
-                    </View>
-                    <View style={styles.indexRight}>
-                      <RatingBadge score={getSpotRating(spot.id)} compact />
-                      <Pressable
-                        hitSlop={8}
-                        onPress={() => focusSpot(spot.id)}
-                        style={styles.mapIconButton}
-                      >
-                        <Glyph name="navigate-outline" size={18} color={palette.text} />
-                      </Pressable>
-                    </View>
-                  </Pressable>
+                if (extendView === "lp") {
+                  const item = lonelyPlanetHighlights[0];
+                  if (item) {
+                    focusCollection(item.spotIds, item.title, uiCopy.extendLp);
+                  }
+                  return;
+                }
 
-                  {expanded && (
-                    <View style={styles.expandedBody}>
-                      <Image
-                        source={getCitywalkImage(getSpotImageKey(spot.id))}
-                        style={styles.expandedImage}
-                      />
-                      <Text style={styles.cardText}>{spot.text}</Text>
-                      <View style={styles.metaColumn}>
-                        <Text style={styles.metaLine}>类型：{inferSpotCategory(spot)}</Text>
-                        <Text style={styles.metaLine}>
-                          开放参考：{getSpotOpenHours(spot.id)}
-                        </Text>
-                        <Text style={styles.metaLine}>
-                          距中环：{getDistanceFromCenter(spot.coords)}
-                        </Text>
-                        <Text style={styles.metaLine}>
-                          到达建议：{spot.travel || "建议结合当天路线安排"}
-                        </Text>
-                      </View>
-                      <View style={styles.stopActionRow}>
-                        <MiniButton
-                          icon="location-outline"
-                          label="定位到地图"
-                          onPress={() => focusSpot(spot.id)}
-                        />
-                        <MiniButton
-                          icon="document-text-outline"
-                          label="看详情"
-                          onPress={() => setDetailSpotId(spot.id)}
-                        />
-                      </View>
-                    </View>
-                  )}
-                </GlassCard>
-              );
-            })}
+                const item = cityRecommendations[0];
+                if (item) {
+                  focusCollection(item.spotIds, item.title, uiCopy.extendGuide);
+                }
+              }}
+            />
           </View>
-        )}
+        </GlassCard>
       </ScrollView>
     );
   }
@@ -1173,103 +1381,46 @@ function App() {
           note={uiCopy.guideNote}
         />
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          decelerationRate="fast"
-          snapToAlignment="start"
-          snapToInterval={galleryCardWidth + 12}
-          contentContainerStyle={styles.galleryRow}
+        <Pressable
+          style={styles.galleryHeroCard}
+          onPress={() => openRouteLayer("gallery")}
         >
-          {galleryItems.map((item: any) => (
+          <Image
+            source={getCitywalkImage(galleryItems[0]?.image)}
+            style={styles.galleryHeroImage}
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(9,21,36,0.94)"]}
+            style={styles.galleryShade}
+          />
+          <View style={styles.galleryContent}>
+            <Text style={styles.galleryKicker}>{galleryItems[0]?.kicker || "路线图册"}</Text>
+            <Text style={styles.galleryTitle}>
+              {galleryItems[0]?.title || "先从图册进入这条线"}
+            </Text>
+            <Text numberOfLines={2} style={styles.galleryNote}>
+              {galleryItems[0]?.note || "点进去看整组图册和地图定位。"}
+            </Text>
+          </View>
+        </Pressable>
+
+        <View style={styles.layerEntryGridWide}>
+          {guideLayerEntries.map((item) => (
             <Pressable
-              key={item.title}
-              style={[styles.galleryCard, { width: galleryCardWidth }]}
-              onPress={() => {
-                if (item.spotId) focusSpot(item.spotId, { kicker: "图册定位" });
-                if (item.spotIds) focusCollection(item.spotIds, item.title, "图册定位");
-              }}
+              key={item.key}
+              style={[styles.layerEntryCard, { width: layerCardWidth }]}
+              onPress={() => openRouteLayer(item.key)}
             >
-              <Image
-                source={getCitywalkImage(item.image)}
-                style={styles.galleryImage}
-              />
-              <LinearGradient
-                colors={["transparent", "rgba(9,21,36,0.92)"]}
-                style={styles.galleryShade}
-              />
-              <View style={styles.galleryContent}>
-                <Text style={styles.galleryKicker}>{item.kicker}</Text>
-                <Text style={styles.galleryTitle}>{item.title}</Text>
-                <Text numberOfLines={2} style={styles.galleryNote}>
-                  {item.note}
-                </Text>
+              <Text style={styles.layerEntryKicker}>{item.kicker}</Text>
+              <Text style={styles.layerEntryTitle}>{item.title}</Text>
+              <Text style={styles.layerEntryNote}>{item.note}</Text>
+              <View style={styles.layerEntryFooter}>
+                <Text style={styles.layerEntryAction}>进入查看</Text>
+                <Glyph name="navigate-outline" size={16} color={palette.gold} />
               </View>
             </Pressable>
           ))}
-        </ScrollView>
-
-        <GlassCard>
-          <Text style={styles.featureTitle}>路线故事线</Text>
-          <View style={styles.storyList}>
-            {currentRoute.chapters.map((chapter: any) => (
-              <View key={chapter.step} style={styles.storyItem}>
-                <View style={styles.storyBadge}>
-                  <Text style={styles.storyBadgeText}>{chapter.step}</Text>
-                </View>
-                <View style={styles.storyBody}>
-                  <Text style={styles.storyTitle}>{chapter.title}</Text>
-                  <Text style={styles.cardText}>{chapter.body}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </GlassCard>
-
-        <GlassCard>
-          <Text style={styles.featureTitle}>时间分配</Text>
-          <View style={styles.stackGap}>
-            {currentRoute.schedule.map((item: any) => (
-              <View key={item.phase} style={styles.scheduleCard}>
-                <Text style={styles.schedulePhase}>{item.phase}</Text>
-                <Text style={styles.scheduleTitle}>{item.title}</Text>
-                <Text style={styles.cardText}>{item.body}</Text>
-              </View>
-            ))}
-          </View>
-        </GlassCard>
-
-        <GlassCard>
-          <Text style={styles.featureTitle}>出发前先看这几条</Text>
-          <View style={styles.stackGap}>
-            {currentRoute.prep.map((item: string) => (
-              <Text key={item} style={styles.listLine}>
-                • {item}
-              </Text>
-            ))}
-          </View>
-        </GlassCard>
-
-        <GlassCard>
-          <Text style={styles.featureTitle}>评级与开放时间说明</Text>
-          <Text style={styles.cardText}>{ratingMethodNote}</Text>
-          <Text style={[styles.cardText, styles.textTopGap]}>
-            {openingHoursMethodNote}
-          </Text>
-        </GlassCard>
-
-        <GlassCard>
-          <Text style={styles.featureTitle}>资料来源</Text>
-          <View style={styles.stackGap}>
-            {sourceLinks.slice(0, 12).map((item: any) => (
-              <View key={item.url} style={styles.sourceItem}>
-                <Text style={styles.sourceTitle}>{item.label}</Text>
-                <Text style={styles.sourceNote}>{item.note}</Text>
-                <Text style={styles.sourceUrl}>{item.url}</Text>
-              </View>
-            ))}
-          </View>
-        </GlassCard>
+        </View>
       </ScrollView>
     );
   }
@@ -1284,7 +1435,6 @@ function App() {
         <View style={styles.appHeader}>
           <View>
             <Text style={styles.appTitle}>香港旅行导览</Text>
-            <Text style={styles.appSubtitle}>{uiCopy.appSubtitle}</Text>
           </View>
         </View>
 
@@ -1332,6 +1482,57 @@ function App() {
           onClose={() => setDetailSpotId(null)}
           onLocate={(spotId) => focusSpot(spotId)}
         />
+        <RoutePickerModal
+          visible={showRoutePicker}
+          routes={routes}
+          selectedRouteId={routeId}
+          routeOptionWidth={routeOptionWidth}
+          onClose={() => setShowRoutePicker(false)}
+          onSelectRoute={chooseRoute}
+        />
+        <RouteLayerModal
+          layer={routeLayer}
+          route={currentRoute}
+          routeStops={routeStops}
+          galleryItems={galleryItems}
+          onClose={() => setRouteLayer(null)}
+          onOpenSpot={(spotId) => {
+            setRouteLayer(null);
+            setDetailSpotId(spotId);
+          }}
+          onLocateSpot={(spotId) => {
+            setRouteLayer(null);
+            focusSpot(spotId);
+          }}
+          onFocusCollection={(spotIds, title, kicker) => {
+            setRouteLayer(null);
+            focusCollection(spotIds, title, kicker);
+          }}
+        />
+        <ExtendLayerModal
+          layer={extendLayer}
+          selectedRegion={selectedRegion}
+          filteredRegionSpots={filteredRegionSpots}
+          lonelyPlanetHighlights={lonelyPlanetHighlights}
+          cityRecommendations={cityRecommendations}
+          expandedSpotId={expandedSpotId}
+          onClose={() => setExtendLayer(null)}
+          onToggleSpot={(spotId) =>
+            setExpandedSpotId((prev) => (prev === spotId ? null : spotId))
+          }
+          onOpenSpot={(spotId) => {
+            setExtendLayer(null);
+            setDetailSpotId(spotId);
+          }}
+          onLocateSpot={(spotId) => {
+            setExtendLayer(null);
+            focusSpot(spotId);
+          }}
+          onFocusCollection={(spotIds, title, kicker) => {
+            setExtendLayer(null);
+            focusCollection(spotIds, title, kicker);
+          }}
+        />
       </LinearGradient>
     </SafeAreaView>
   );
@@ -1346,6 +1547,560 @@ function AppWithProviders() {
 }
 
 export { AppWithProviders as default };
+
+function RoutePickerModal({
+  visible,
+  routes,
+  selectedRouteId,
+  routeOptionWidth,
+  onClose,
+  onSelectRoute,
+}: {
+  visible: boolean;
+  routes: any[];
+  selectedRouteId: string;
+  routeOptionWidth: number;
+  onClose: () => void;
+  onSelectRoute: (routeId: string) => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.layerBackdrop}>
+        <View style={styles.pickerSheet}>
+          <View style={styles.pickerHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionEyebrow}>行程入口</Text>
+              <Text style={styles.pickerTitle}>这次先玩几天</Text>
+              <Text style={styles.sectionHint}>
+                先选一个方案，再进入行程页。后面随时都能改。
+              </Text>
+            </View>
+            <Pressable style={styles.closeIconButton} onPress={onClose}>
+              <Glyph name="close-outline" size={18} color={palette.text} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToAlignment="start"
+            snapToInterval={routeOptionWidth + 12}
+            contentContainerStyle={styles.routeOptionRow}
+          >
+            {routes.map((route: any) => (
+              <Pressable
+                key={route.id}
+                style={[
+                  styles.routeOptionCard,
+                  styles.routeOptionCardLarge,
+                  { width: routeOptionWidth },
+                  selectedRouteId === route.id && styles.routeOptionCardActive,
+                ]}
+                onPress={() => onSelectRoute(route.id)}
+              >
+                <View style={styles.routeOptionTop}>
+                  <Text
+                    style={[
+                      styles.routeOptionDays,
+                      selectedRouteId === route.id && styles.routeOptionDaysActive,
+                    ]}
+                  >
+                    {route.days}
+                  </Text>
+                  <View
+                    style={[
+                      styles.routeOptionBadge,
+                      selectedRouteId === route.id && styles.routeOptionBadgeActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.routeOptionBadgeText,
+                        selectedRouteId === route.id && styles.routeOptionBadgeTextActive,
+                      ]}
+                    >
+                      {route.label}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.routeOptionTitle}>{route.fit}</Text>
+                <Text style={styles.routeOptionNote}>{route.note}</Text>
+                <Text numberOfLines={2} style={styles.routeOptionLead}>
+                  {route.lead}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function RouteLayerModal({
+  layer,
+  route,
+  routeStops,
+  galleryItems,
+  onClose,
+  onOpenSpot,
+  onLocateSpot,
+  onFocusCollection,
+}: {
+  layer: RouteLayerKey | null;
+  route: any;
+  routeStops: any[];
+  galleryItems: any[];
+  onClose: () => void;
+  onOpenSpot: (spotId: string) => void;
+  onLocateSpot: (spotId: string) => void;
+  onFocusCollection: (spotIds: string[], title: string, kicker: string) => void;
+}) {
+  if (!layer) return null;
+
+  const config: Record<RouteLayerKey, { kicker: string; title: string; note: string }> = {
+    schedule: {
+      kicker: "每日安排",
+      title: `${route.label}怎么排`,
+      note: "先把每天的大致节奏扫一遍，再决定哪里需要加减。",
+    },
+    logic: {
+      kicker: "路线逻辑",
+      title: "这条线为什么这样走",
+      note: "这里会把路线重点、适合人群和节奏提醒放在一起。",
+    },
+    stops: {
+      kicker: "站点清单",
+      title: "按站点往下看",
+      note: "每一站都能继续开详情或直接跳地图。",
+    },
+    gallery: {
+      kicker: "路线图册",
+      title: "先用画面建立感觉",
+      note: "适合先看一眼这条路线的气质，再决定想去哪里深看。",
+    },
+    story: {
+      kicker: "路线故事线",
+      title: "这条路线的叙事顺序",
+      note: "把一天或几天的观看顺序梳理成更容易理解的段落。",
+    },
+    prep: {
+      kicker: "出发信息",
+      title: "出发前先看这层",
+      note: "把准备事项、开放时间口径和评级说明都压在一层里。",
+    },
+    sources: {
+      kicker: "资料来源",
+      title: "这次用到的资料",
+      note: "方便你回头核对出处，也便于后续继续补资料。",
+    },
+  };
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={styles.layerSheet}>
+          <View style={styles.layerSheetHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionEyebrow}>{config[layer].kicker}</Text>
+              <Text style={styles.layerSheetTitle}>{config[layer].title}</Text>
+              <Text style={styles.sectionHint}>{config[layer].note}</Text>
+            </View>
+            <Pressable style={styles.closeIconButton} onPress={onClose}>
+              <Glyph name="close-outline" size={18} color={palette.text} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.layerSheetContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {layer === "schedule" && (
+              <View style={styles.stackGap}>
+                {route.schedule.map((item: any) => (
+                  <View key={item.phase} style={styles.scheduleCard}>
+                    <Text style={styles.schedulePhase}>{item.phase}</Text>
+                    <Text style={styles.scheduleTitle}>{item.title}</Text>
+                    <Text style={styles.cardText}>{item.body}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {layer === "logic" && (
+              <View style={styles.stackGap}>
+                {route.panels.map((panel: any) => (
+                  <GlassCard key={panel.title} style={styles.logicCard}>
+                    <Text style={styles.logicTitle}>{panel.title}</Text>
+                    <Text style={styles.cardText}>{panel.body}</Text>
+                  </GlassCard>
+                ))}
+              </View>
+            )}
+
+            {layer === "stops" && (
+              <View style={styles.stopsWrap}>
+                {routeStops.map((spot: any, index: number) => (
+                  <Pressable
+                    key={spot.id}
+                    style={styles.stopCard}
+                    onPress={() => onOpenSpot(spot.id)}
+                  >
+                    <Image
+                      source={getCitywalkImage(getSpotImageKey(spot.id))}
+                      style={styles.stopImage}
+                    />
+                    <View style={styles.stopBody}>
+                      <View style={styles.rowBetween}>
+                        <View style={styles.stopTitleWrap}>
+                          <View style={styles.stopIndex}>
+                            <Text style={styles.stopIndexText}>
+                              {String(index + 1).padStart(2, "0")}
+                            </Text>
+                          </View>
+                          <Text style={styles.stopTitle}>{spot.name}</Text>
+                        </View>
+                        <RatingBadge score={getSpotRating(spot.id)} compact />
+                      </View>
+                      <Text numberOfLines={2} style={styles.stopSubtitle}>
+                        {spot.subtitle}
+                      </Text>
+                      <View style={styles.metaRow}>
+                        <MetaPill
+                          icon="time-outline"
+                          text={getSpotDuration(spot) || "现场调整"}
+                        />
+                        <MetaPill
+                          icon="sunny-outline"
+                          text={getSpotOpenHours(spot.id)}
+                        />
+                      </View>
+                      <View style={styles.stopActionRow}>
+                        <MiniButton
+                          icon="document-text-outline"
+                          label="看详情"
+                          onPress={() => onOpenSpot(spot.id)}
+                        />
+                        <MiniButton
+                          icon="location-outline"
+                          label="地图定位"
+                          onPress={() => onLocateSpot(spot.id)}
+                        />
+                      </View>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            {layer === "gallery" && (
+              <View style={styles.stackGap}>
+                {galleryItems.map((item: any) => (
+                  <Pressable
+                    key={item.title}
+                    style={styles.galleryLayerCard}
+                    onPress={() => {
+                      if (item.spotId) onLocateSpot(item.spotId);
+                      if (item.spotIds) {
+                        onFocusCollection(item.spotIds, item.title, "图册定位");
+                      }
+                    }}
+                  >
+                    <Image
+                      source={getCitywalkImage(item.image)}
+                      style={styles.galleryLayerImage}
+                    />
+                    <View style={styles.galleryLayerBody}>
+                      <Text style={styles.galleryKicker}>{item.kicker}</Text>
+                      <Text style={styles.galleryTitle}>{item.title}</Text>
+                      <Text style={styles.cardText}>{item.note}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            {layer === "story" && (
+              <View style={styles.storyList}>
+                {route.chapters.map((chapter: any) => (
+                  <View key={chapter.step} style={styles.storyItem}>
+                    <View style={styles.storyBadge}>
+                      <Text style={styles.storyBadgeText}>{chapter.step}</Text>
+                    </View>
+                    <View style={styles.storyBody}>
+                      <Text style={styles.storyTitle}>{chapter.title}</Text>
+                      <Text style={styles.cardText}>{chapter.body}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {layer === "prep" && (
+              <View style={styles.stackGap}>
+                <GlassCard>
+                  <Text style={styles.featureTitle}>出发前先看这几条</Text>
+                  <View style={styles.stackGap}>
+                    {route.prep.map((item: string) => (
+                      <Text key={item} style={styles.listLine}>
+                        • {item}
+                      </Text>
+                    ))}
+                  </View>
+                </GlassCard>
+
+                <GlassCard>
+                  <Text style={styles.featureTitle}>评级与开放时间说明</Text>
+                  <Text style={styles.cardText}>{ratingMethodNote}</Text>
+                  <Text style={[styles.cardText, styles.textTopGap]}>
+                    {openingHoursMethodNote}
+                  </Text>
+                </GlassCard>
+              </View>
+            )}
+
+            {layer === "sources" && (
+              <GlassCard>
+                <Text style={styles.featureTitle}>资料来源</Text>
+                <View style={styles.stackGap}>
+                  {sourceLinks.slice(0, 12).map((item: any) => (
+                    <View key={item.url} style={styles.sourceItem}>
+                      <Text style={styles.sourceTitle}>{item.label}</Text>
+                      <Text style={styles.sourceNote}>{item.note}</Text>
+                      <Text style={styles.sourceUrl}>{item.url}</Text>
+                    </View>
+                  ))}
+                </View>
+              </GlassCard>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function ExtendLayerModal({
+  layer,
+  selectedRegion,
+  filteredRegionSpots,
+  lonelyPlanetHighlights,
+  cityRecommendations,
+  expandedSpotId,
+  onClose,
+  onToggleSpot,
+  onOpenSpot,
+  onLocateSpot,
+  onFocusCollection,
+}: {
+  layer: ExtendView | null;
+  selectedRegion: any;
+  filteredRegionSpots: any[];
+  lonelyPlanetHighlights: any[];
+  cityRecommendations: any[];
+  expandedSpotId: string | null;
+  onClose: () => void;
+  onToggleSpot: (spotId: string) => void;
+  onOpenSpot: (spotId: string) => void;
+  onLocateSpot: (spotId: string) => void;
+  onFocusCollection: (spotIds: string[], title: string, kicker: string) => void;
+}) {
+  if (!layer) return null;
+
+  const titles: Record<ExtendView, { kicker: string; title: string; note: string }> = {
+    index: {
+      kicker: "区域索引",
+      title: selectedRegion.title,
+      note: "先按片区浏览，再决定要不要开地图或继续看详情。",
+    },
+    lp: {
+      kicker: "主题推荐",
+      title: "按兴趣看香港",
+      note: "先按兴趣找方向，再决定要不要开地图。",
+    },
+    guide: {
+      kicker: "替代路线",
+      title: "换一种排法",
+      note: "如果你想换种玩法，这里有几条成型的替代安排。",
+    },
+  };
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={styles.layerSheet}>
+          <View style={styles.layerSheetHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionEyebrow}>{titles[layer].kicker}</Text>
+              <Text style={styles.layerSheetTitle}>{titles[layer].title}</Text>
+              <Text style={styles.sectionHint}>{titles[layer].note}</Text>
+            </View>
+            <Pressable style={styles.closeIconButton} onPress={onClose}>
+              <Glyph name="close-outline" size={18} color={palette.text} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.layerSheetContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {layer === "index" && (
+              <View style={styles.stackGap}>
+                <GlassCard>
+                  <Text style={styles.featureTitle}>{selectedRegion.title}</Text>
+                  <Text style={styles.cardText}>{selectedRegion.intro}</Text>
+                </GlassCard>
+
+                {filteredRegionSpots.map((spot: any) => {
+                  const expanded = expandedSpotId === spot.id;
+                  return (
+                    <GlassCard key={spot.id} style={styles.indexCard}>
+                      <Pressable
+                        style={styles.indexHead}
+                        onPress={() => onToggleSpot(spot.id)}
+                      >
+                        <View style={styles.indexHeadMain}>
+                          <Text style={styles.indexTitle}>{spot.name}</Text>
+                          <Text style={styles.indexMeta}>
+                            {inferSpotCategory(spot)} · {getDistanceFromCenter(spot.coords)}
+                          </Text>
+                        </View>
+                        <View style={styles.indexRight}>
+                          <RatingBadge score={getSpotRating(spot.id)} compact />
+                          <View style={styles.indexQuickRow}>
+                            <Pressable
+                              hitSlop={8}
+                              onPress={(event: any) => {
+                                event?.stopPropagation?.();
+                                onLocateSpot(spot.id);
+                              }}
+                              style={styles.indexPillButton}
+                            >
+                              <Glyph
+                                name="navigate-outline"
+                                size={14}
+                                color={palette.text}
+                              />
+                              <Text style={styles.indexPillText}>地图</Text>
+                            </Pressable>
+                            <Text style={styles.indexExpandText}>
+                              {expanded ? "收起" : "展开"}
+                            </Text>
+                          </View>
+                        </View>
+                      </Pressable>
+
+                      {expanded && (
+                        <View style={styles.expandedBody}>
+                          <Image
+                            source={getCitywalkImage(getSpotImageKey(spot.id))}
+                            style={styles.expandedImage}
+                          />
+                          <View style={styles.stopActionRow}>
+                            <MiniButton
+                              icon="location-outline"
+                              label="定位到地图"
+                              onPress={() => onLocateSpot(spot.id)}
+                            />
+                            <MiniButton
+                              icon="document-text-outline"
+                              label="看详情"
+                              onPress={() => onOpenSpot(spot.id)}
+                            />
+                          </View>
+                          <Text style={styles.cardText}>{spot.text}</Text>
+                          <View style={styles.metaColumn}>
+                            <Text style={styles.metaLine}>
+                              类型：{inferSpotCategory(spot)}
+                            </Text>
+                            <Text style={styles.metaLine}>
+                              开放参考：{getSpotOpenHours(spot.id)}
+                            </Text>
+                            <Text style={styles.metaLine}>
+                              距中环：{getDistanceFromCenter(spot.coords)}
+                            </Text>
+                            <Text style={styles.metaLine}>
+                              到达建议：{spot.travel || "建议结合当天路线安排"}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                    </GlassCard>
+                  );
+                })}
+              </View>
+            )}
+
+            {layer === "lp" && (
+              <View style={styles.stackGap}>
+                {lonelyPlanetHighlights.map((item: any) => (
+                  <GlassCard key={item.title} style={styles.featureCard}>
+                    <Image
+                      source={getCitywalkImage(item.image)}
+                      style={styles.featureImage}
+                    />
+                    <View style={styles.featureBody}>
+                      <Text style={styles.featureSource}>{item.source}</Text>
+                      <Text style={styles.featureTitle}>{item.title}</Text>
+                      <Text style={styles.cardText}>{item.text}</Text>
+                      <TagRow tags={item.chips} />
+                      <ActionButton
+                        icon="map-outline"
+                        label={uiCopy.extendMapAction}
+                        onPress={() =>
+                          onFocusCollection(item.spotIds, item.title, uiCopy.extendLp)
+                        }
+                        primary
+                      />
+                    </View>
+                  </GlassCard>
+                ))}
+              </View>
+            )}
+
+            {layer === "guide" && (
+              <View style={styles.stackGap}>
+                {cityRecommendations.map((item: any) => (
+                  <GlassCard key={item.title} style={styles.featureCard}>
+                    <Image
+                      source={getCitywalkImage(item.image)}
+                      style={styles.featureImage}
+                    />
+                    <View style={styles.featureBody}>
+                      <View style={styles.rowBetween}>
+                        <Text style={styles.featureTitle}>{item.title}</Text>
+                        <Text style={styles.featureSource}>{item.area}</Text>
+                      </View>
+                      <Text style={styles.cardText}>{item.text}</Text>
+                      <View style={styles.scheduleBox}>
+                        {item.schedule.map((line: string) => (
+                          <Text key={line} style={styles.scheduleLine}>
+                            • {line}
+                          </Text>
+                        ))}
+                      </View>
+                      <ActionButton
+                        icon="map-outline"
+                        label={uiCopy.extendMapAction}
+                        onPress={() =>
+                          onFocusCollection(item.spotIds, item.title, uiCopy.extendGuide)
+                        }
+                        primary
+                      />
+                    </View>
+                  </GlassCard>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 function SpotDetailModal({
   spotId,
@@ -1474,6 +2229,14 @@ function GlassCard({
   style?: any;
 }) {
   return <View style={[styles.glassCard, style]}>{children}</View>;
+}
+
+function MiniInfoPill({ label }: { label: string }) {
+  return (
+    <View style={styles.miniInfoPill}>
+      <Text style={styles.miniInfoPillText}>{label}</Text>
+    </View>
+  );
 }
 
 function GlassPill({
@@ -1666,20 +2429,20 @@ const styles = StyleSheet.create({
   },
   appHeader: {
     paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingTop: 6,
+    paddingBottom: 6,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   appTitle: {
     color: palette.text,
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "700",
   },
   appSubtitle: {
     color: palette.subText,
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 2,
   },
   contentArea: {
@@ -1689,7 +2452,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 28,
-    gap: 16,
+    gap: 12,
   },
   heroCard: {
     minHeight: 304,
@@ -1778,7 +2541,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   sectionHead: {
-    gap: 4,
+    gap: 2,
   },
   sectionEyebrow: {
     color: palette.gold,
@@ -1789,13 +2552,13 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: palette.text,
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "700",
   },
   sectionHint: {
     color: palette.subText,
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 12,
+    lineHeight: 18,
   },
   cardGrid: {
     gap: 12,
@@ -1807,6 +2570,111 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 16,
     overflow: "hidden",
+  },
+  currentRouteCard: {
+    gap: 12,
+  },
+  currentRouteHead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  currentRouteCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  currentRouteTitle: {
+    color: palette.text,
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  currentRouteStats: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  routeModeRow: {
+    gap: 10,
+    paddingRight: 20,
+  },
+  routeModeChip: {
+    minHeight: 44,
+    borderRadius: 18,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: palette.border,
+    justifyContent: "center",
+    gap: 2,
+  },
+  routeModeChipActive: {
+    backgroundColor: "rgba(249, 220, 123, 0.14)",
+    borderColor: "rgba(249, 220, 123, 0.28)",
+  },
+  routeModeChipDays: {
+    color: palette.text,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  routeModeChipDaysActive: {
+    color: palette.gold,
+  },
+  routeModeChipText: {
+    color: palette.subText,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  routeModeChipTextActive: {
+    color: palette.text,
+  },
+  routeModeMoreButton: {
+    minHeight: 44,
+    borderRadius: 18,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: palette.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  routeModeMoreText: {
+    color: palette.text,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  miniInfoPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  miniInfoPillText: {
+    color: palette.text,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  layerActionButton: {
+    minHeight: 38,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  layerActionButtonText: {
+    color: palette.text,
+    fontSize: 12,
+    fontWeight: "700",
   },
   plannerCard: {
     gap: 14,
@@ -1830,6 +2698,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.border,
     gap: 10,
+  },
+  routeOptionCardLarge: {
+    minHeight: 164,
   },
   routeOptionCardActive: {
     backgroundColor: "rgba(249, 220, 123, 0.12)",
@@ -1879,6 +2750,161 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
   },
+  routeOptionLead: {
+    color: "rgba(244,247,251,0.82)",
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  routeRail: {
+    gap: 12,
+    paddingRight: 20,
+  },
+  routeShowcaseCard: {
+    minHeight: 236,
+    borderRadius: 26,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.panel,
+  },
+  routeShowcaseCardActive: {
+    borderColor: "rgba(249, 220, 123, 0.42)",
+  },
+  routeShowcaseImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: undefined,
+    height: undefined,
+  },
+  routeShowcaseShade: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  routeShowcaseBody: {
+    flex: 1,
+    justifyContent: "flex-end",
+    padding: 12,
+    gap: 6,
+  },
+  routeShowcaseTitle: {
+    color: palette.text,
+    fontSize: 20,
+    lineHeight: 25,
+    fontWeight: "800",
+  },
+  routeShowcaseText: {
+    color: "rgba(244,247,251,0.9)",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  dayPlannerCard: {
+    gap: 12,
+  },
+  dayChipRow: {
+    gap: 10,
+    paddingRight: 18,
+  },
+  dayChip: {
+    minWidth: 126,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: palette.border,
+    gap: 4,
+  },
+  dayChipActive: {
+    backgroundColor: "rgba(122,182,255,0.16)",
+    borderColor: "rgba(122,182,255,0.3)",
+  },
+  dayChipPhase: {
+    color: palette.subText,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  dayChipPhaseActive: {
+    color: palette.sky,
+  },
+  dayChipTitle: {
+    color: palette.text,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  dayChipTitleActive: {
+    color: "#e9f4ff",
+  },
+  daySummaryCard: {
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  daySummaryTitle: {
+    color: palette.text,
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  daySpotTagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  daySpotTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(126,220,208,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(126,220,208,0.18)",
+  },
+  daySpotTagText: {
+    color: palette.mint,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  layerEntryGrid: {
+    gap: 12,
+  },
+  layerEntryGridWide: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  layerEntryCard: {
+    borderRadius: 22,
+    padding: 14,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: palette.border,
+    gap: 6,
+  },
+  layerEntryKicker: {
+    color: palette.gold,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  layerEntryTitle: {
+    color: palette.text,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  layerEntryNote: {
+    color: palette.subText,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  layerEntryFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 2,
+  },
+  layerEntryAction: {
+    color: palette.text,
+    fontSize: 13,
+    fontWeight: "700",
+  },
   logicCard: {
     paddingVertical: 18,
   },
@@ -1890,8 +2916,8 @@ const styles = StyleSheet.create({
   },
   cardText: {
     color: palette.subText,
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 13,
+    lineHeight: 20,
   },
   stopsWrap: {
     gap: 12,
@@ -2022,10 +3048,10 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   actionButton: {
-    minHeight: 42,
+    minHeight: 40,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: "rgba(255,255,255,0.06)",
@@ -2039,7 +3065,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: palette.text,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
   },
   actionButtonTextPrimary: {
@@ -2066,13 +3092,59 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingBottom: 18,
+    gap: 10,
+  },
+  mapPlannerWrap: {
     gap: 12,
+  },
+  mapCanvasWrap: {
+    height: 268,
+    minHeight: 268,
+    flexShrink: 0,
+  },
+  mapPlannerSheet: {
+    gap: 10,
+    paddingTop: 12,
+    flexShrink: 0,
+  },
+  mapSheetButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: palette.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mapSheetTagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  mapSheetMoreTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  mapSheetMoreTagText: {
+    color: palette.subText,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  mapSheetActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    flexWrap: "wrap",
   },
   mapHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    paddingTop: 10,
+    paddingTop: 4,
     gap: 12,
   },
   mapHeaderCopy: {
@@ -2082,7 +3154,7 @@ const styles = StyleSheet.create({
   },
   mapHeaderTitle: {
     color: palette.text,
-    fontSize: 23,
+    fontSize: 18,
     fontWeight: "800",
     marginTop: 4,
   },
@@ -2093,9 +3165,9 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   smallIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
     borderColor: palette.border,
@@ -2103,7 +3175,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   searchPanel: {
-    padding: 12,
+    padding: 10,
   },
   searchInputWrap: {
     flexDirection: "row",
@@ -2114,7 +3186,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.border,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 9,
   },
   searchInput: {
     flex: 1,
@@ -2164,8 +3236,8 @@ const styles = StyleSheet.create({
     paddingRight: 18,
   },
   segmentChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
     borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1,
@@ -2183,6 +3255,65 @@ const styles = StyleSheet.create({
   segmentChipTextActive: {
     color: palette.gold,
   },
+  extendOverviewCard: {
+    gap: 12,
+  },
+  extendPreviewRow: {
+    gap: 12,
+    paddingRight: 24,
+  },
+  extendPreviewCard: {
+    minHeight: 184,
+    borderRadius: 24,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.panel,
+  },
+  extendPreviewImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: undefined,
+    height: undefined,
+  },
+  extendPreviewBody: {
+    flex: 1,
+    justifyContent: "flex-end",
+    padding: 14,
+    gap: 6,
+  },
+  extendPreviewTitle: {
+    color: palette.text,
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  extendPreviewText: {
+    color: "rgba(244,247,251,0.88)",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  extendMiniCard: {
+    flexDirection: "row",
+    borderRadius: 22,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.panel,
+  },
+  extendMiniImage: {
+    width: 82,
+    height: "100%",
+    minHeight: 112,
+  },
+  extendMiniBody: {
+    flex: 1,
+    padding: 12,
+    gap: 6,
+  },
+  extendMiniTitle: {
+    color: palette.text,
+    fontSize: 16,
+    fontWeight: "700",
+  },
   stackGap: {
     gap: 14,
   },
@@ -2192,7 +3323,7 @@ const styles = StyleSheet.create({
   },
   featureImage: {
     width: "100%",
-    height: 168,
+    height: 156,
   },
   featureBody: {
     padding: 16,
@@ -2205,7 +3336,7 @@ const styles = StyleSheet.create({
   },
   featureTitle: {
     color: palette.text,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
   },
   tagRow: {
@@ -2238,7 +3369,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   regionChip: {
-    padding: 14,
+    padding: 12,
     borderRadius: 22,
     backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1,
@@ -2251,7 +3382,7 @@ const styles = StyleSheet.create({
   },
   regionChipTitle: {
     color: palette.text,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
   },
   regionChipTitleActive: {
@@ -2304,6 +3435,33 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: 10,
   },
+  indexQuickRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  indexPillButton: {
+    minHeight: 30,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: palette.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  indexPillText: {
+    color: palette.text,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  indexExpandText: {
+    color: palette.subText,
+    fontSize: 12,
+    fontWeight: "700",
+  },
   mapIconButton: {
     width: 34,
     height: 34,
@@ -2338,6 +3496,19 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingRight: 24,
   },
+  galleryHeroCard: {
+    height: 190,
+    borderRadius: 24,
+    overflow: "hidden",
+    backgroundColor: palette.panel,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  galleryHeroImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: undefined,
+    height: undefined,
+  },
   galleryCard: {
     height: 214,
     borderRadius: 24,
@@ -2354,9 +3525,9 @@ const styles = StyleSheet.create({
   },
   galleryContent: {
     position: "absolute",
-    left: 14,
-    right: 14,
-    bottom: 14,
+    left: 12,
+    right: 12,
+    bottom: 12,
     gap: 4,
   },
   galleryKicker: {
@@ -2366,13 +3537,13 @@ const styles = StyleSheet.create({
   },
   galleryTitle: {
     color: palette.text,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
   },
   galleryNote: {
     color: "rgba(244,247,251,0.88)",
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 18,
   },
   storyList: {
     gap: 14,
@@ -2455,9 +3626,9 @@ const styles = StyleSheet.create({
     left: 14,
     right: 14,
     bottom: 16,
-    borderRadius: 24,
+    borderRadius: 22,
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingVertical: 6,
     flexDirection: "row",
     justifyContent: "space-between",
     borderWidth: 1,
@@ -2469,11 +3640,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 48,
+    minHeight: 44,
     borderRadius: 18,
   },
   tabButtonActive: {
-    minHeight: 48,
+    minHeight: 44,
     borderRadius: 18,
     paddingHorizontal: 12,
     alignItems: "center",
@@ -2524,6 +3695,68 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(4, 10, 16, 0.56)",
     justifyContent: "flex-end",
   },
+  layerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(4, 10, 16, 0.62)",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  pickerSheet: {
+    maxHeight: "72%",
+    backgroundColor: "#0b1829",
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: palette.border,
+    padding: 18,
+    gap: 16,
+  },
+  pickerHead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  pickerTitle: {
+    color: palette.text,
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  closeIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  layerSheet: {
+    maxHeight: "86%",
+    backgroundColor: "#0b1829",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: "hidden",
+    paddingTop: 16,
+  },
+  layerSheetHead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+  },
+  layerSheetTitle: {
+    color: palette.text,
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  layerSheetContent: {
+    padding: 18,
+    paddingBottom: 40,
+    gap: 14,
+  },
   modalSheet: {
     maxHeight: "88%",
     backgroundColor: "#0b1829",
@@ -2554,6 +3787,21 @@ const styles = StyleSheet.create({
     color: palette.subText,
     fontSize: 15,
     lineHeight: 24,
+  },
+  galleryLayerCard: {
+    borderRadius: 24,
+    overflow: "hidden",
+    backgroundColor: palette.panel,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  galleryLayerImage: {
+    width: "100%",
+    height: 188,
+  },
+  galleryLayerBody: {
+    padding: 16,
+    gap: 6,
   },
   detailBlock: {
     gap: 10,
