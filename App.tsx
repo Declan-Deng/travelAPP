@@ -2,12 +2,6 @@ import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
 import { ReactNode, useEffect, useMemo, useState } from "react";
-import Geolocation, {
-  type GeoError,
-  type GeoOptions,
-  type GeoPosition,
-  PositionError,
-} from "react-native-geolocation-service";
 import {
   Alert,
   Image,
@@ -118,10 +112,117 @@ const glyphMap: Record<string, string> = {
 type TabKey = "route" | "map" | "extend" | "guide";
 type ExtendView = "index" | "lp" | "guide";
 
+type GeoError = {
+  code?: number;
+  message?: string;
+};
+
+type GeoOptions = {
+  enableHighAccuracy?: boolean;
+  timeout?: number;
+  maximumAge?: number;
+  distanceFilter?: number;
+  showLocationDialog?: boolean;
+  forceRequestLocation?: boolean;
+  forceLocationManager?: boolean;
+  accuracy?: {
+    android?: string;
+    ios?: string;
+  };
+};
+
+type GeoPosition = {
+  coords: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+  };
+  provider?: string;
+};
+
+const PositionError = {
+  POSITION_UNAVAILABLE: 2,
+  TIMEOUT: 3,
+  SETTINGS_NOT_SATISFIED: 5,
+} as const;
+
+let nativeGeolocation: any = null;
+
+try {
+  nativeGeolocation = require("react-native-geolocation-service").default;
+} catch {
+  nativeGeolocation = null;
+}
+
+function normalizeExpoPosition(
+  location:
+    | {
+        coords: {
+          latitude: number;
+          longitude: number;
+          accuracy?: number | null;
+        };
+      }
+    | null,
+  provider = "expo"
+): GeoPosition | null {
+  if (!location) return null;
+
+  return {
+    coords: {
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      accuracy: location.coords.accuracy ?? undefined,
+    },
+    provider,
+  };
+}
+
 function getNativePosition(options: GeoOptions) {
-  return new Promise<GeoPosition>((resolve, reject) => {
-    Geolocation.getCurrentPosition(resolve, reject, options);
+  if (nativeGeolocation?.getCurrentPosition) {
+    return new Promise<GeoPosition>((resolve, reject) => {
+      nativeGeolocation.getCurrentPosition(resolve, reject, options);
+    });
+  }
+
+  return Location.getCurrentPositionAsync({
+    accuracy: options.enableHighAccuracy
+      ? Location.Accuracy.Highest
+      : Location.Accuracy.Balanced,
+    mayShowUserSettingsDialog: options.showLocationDialog ?? true,
+  }).then((location) => {
+    const normalized = normalizeExpoPosition(location);
+    if (!normalized) {
+      throw new Error("POSITION_UNAVAILABLE");
+    }
+    return normalized;
   });
+}
+
+async function getLastKnownPositionCompat() {
+  if (nativeGeolocation?.getCurrentPosition) {
+    return getNativePosition({
+      accuracy: { android: "balanced", ios: "hundredMeters" },
+      enableHighAccuracy: false,
+      timeout: 6000,
+      maximumAge: 1000 * 60 * 30,
+      showLocationDialog: false,
+      forceRequestLocation: true,
+      forceLocationManager: true,
+    });
+  }
+
+  const location = await Location.getLastKnownPositionAsync({
+    maxAge: 1000 * 60 * 30,
+    requiredAccuracy: 500,
+  });
+
+  const normalized = normalizeExpoPosition(location, "expo-last-known");
+  if (!normalized) {
+    throw new Error("POSITION_UNAVAILABLE");
+  }
+
+  return normalized;
 }
 
 function toLatLng(position: GeoPosition): [number, number] {
@@ -134,6 +235,8 @@ function App() {
   const contentWidth = Math.max(screenWidth - 32, 280);
   const regionCardWidth = Math.max(Math.floor((contentWidth - 12) / 2), 132);
   const galleryCardWidth = contentWidth;
+  const routeOptionWidth = Math.max(Math.min(contentWidth * 0.68, 224), 174);
+  const scheduleCardWidth = Math.max(Math.min(contentWidth * 0.8, 268), 214);
   const tabBarBottom = Math.max(14, insets.bottom + 8);
   const tabBarHeight = 74;
   const tabBarReservedSpace = tabBarBottom + tabBarHeight + 12;
@@ -369,15 +472,7 @@ function App() {
 
       setMapKicker("读取最近位置");
       try {
-        const lastKnown = await getNativePosition({
-          accuracy: { android: "balanced", ios: "hundredMeters" },
-          enableHighAccuracy: false,
-          timeout: 6000,
-          maximumAge: 1000 * 60 * 30,
-          showLocationDialog: false,
-          forceRequestLocation: true,
-          forceLocationManager: true,
-        });
+        const lastKnown = await getLastKnownPositionCompat();
         fallbackCoords = toLatLng(lastKnown);
         fallbackProvider = lastKnown.provider || "cached";
         console.log("[locate] lastKnown ok", fallbackProvider, lastKnown.coords.accuracy);
@@ -514,31 +609,64 @@ function App() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.segmentRow}
-        >
-          {routes.map((route: any) => (
-            <Pressable
-              key={route.id}
-              style={[
-                styles.segmentChip,
-                routeId === route.id && styles.segmentChipActive,
-              ]}
-              onPress={() => setRouteId(route.id)}
-            >
-              <Text
+        <GlassCard style={styles.plannerCard}>
+          <View style={styles.plannerHead}>
+            <Text style={styles.sectionEyebrow}>先定天数</Text>
+            <Text style={styles.plannerTitle}>先决定这趟香港打算玩几天</Text>
+            <Text style={styles.sectionHint}>
+              选中后会同步切换路线说明、每日安排、站点列表和地图焦点。
+            </Text>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToAlignment="start"
+            snapToInterval={routeOptionWidth + 12}
+            contentContainerStyle={styles.routeOptionRow}
+          >
+            {routes.map((route: any) => (
+              <Pressable
+                key={route.id}
                 style={[
-                  styles.segmentChipText,
-                  routeId === route.id && styles.segmentChipTextActive,
+                  styles.routeOptionCard,
+                  { width: routeOptionWidth },
+                  routeId === route.id && styles.routeOptionCardActive,
                 ]}
+                onPress={() => setRouteId(route.id)}
               >
-                {route.label}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+                <View style={styles.routeOptionTop}>
+                  <Text
+                    style={[
+                      styles.routeOptionDays,
+                      routeId === route.id && styles.routeOptionDaysActive,
+                    ]}
+                  >
+                    {route.days}
+                  </Text>
+                  <View
+                    style={[
+                      styles.routeOptionBadge,
+                      routeId === route.id && styles.routeOptionBadgeActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.routeOptionBadgeText,
+                        routeId === route.id && styles.routeOptionBadgeTextActive,
+                      ]}
+                    >
+                      {route.label}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.routeOptionTitle}>{route.fit}</Text>
+                <Text style={styles.routeOptionNote}>{route.note}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </GlassCard>
 
         <LinearGradient
           colors={["rgba(122, 182, 255, 0.28)", "rgba(255, 141, 114, 0.1)"]}
@@ -583,6 +711,36 @@ function App() {
         </LinearGradient>
 
         <SectionTitle
+          kicker="每日安排"
+          title="先看每天的大致节奏"
+          note="这一步最像真正安排行程，先扫一遍，再决定哪些站点要深看。"
+        />
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToAlignment="start"
+          snapToInterval={scheduleCardWidth + 12}
+          contentContainerStyle={styles.scheduleRow}
+        >
+          {currentRoute.schedule.map((item: any) => (
+            <View
+              key={item.phase}
+              style={[styles.tripDayCard, { width: scheduleCardWidth }]}
+            >
+              <View style={styles.tripDayTop}>
+                <Text style={styles.tripDayPhase}>{item.phase}</Text>
+                <Text style={styles.tripDayDot}>•</Text>
+                <Text style={styles.tripDayMode}>{currentRoute.mode}</Text>
+              </View>
+              <Text style={styles.tripDayTitle}>{item.title}</Text>
+              <Text style={styles.tripDayBody}>{item.body}</Text>
+            </View>
+          ))}
+        </ScrollView>
+
+        <SectionTitle
           kicker="路线逻辑"
           title={uiCopy.routeLogicTitle}
           note={uiCopy.routeLogicNote}
@@ -610,18 +768,32 @@ function App() {
               style={styles.stopCard}
               onPress={() => setDetailSpotId(spot.id)}
             >
-              <View style={styles.stopIndex}>
-                <Text style={styles.stopIndexText}>{String(index + 1).padStart(2, "0")}</Text>
-              </View>
+              <Image
+                source={getCitywalkImage(getSpotImageKey(spot.id))}
+                style={styles.stopImage}
+              />
               <View style={styles.stopBody}>
                 <View style={styles.rowBetween}>
-                  <Text style={styles.stopTitle}>{spot.name}</Text>
+                  <View style={styles.stopTitleWrap}>
+                    <View style={styles.stopIndex}>
+                      <Text style={styles.stopIndexText}>
+                        {String(index + 1).padStart(2, "0")}
+                      </Text>
+                    </View>
+                    <Text style={styles.stopTitle}>{spot.name}</Text>
+                  </View>
                   <RatingBadge score={getSpotRating(spot.id)} compact />
                 </View>
-                <Text style={styles.stopSubtitle}>{spot.subtitle}</Text>
+                <Text numberOfLines={2} style={styles.stopSubtitle}>
+                  {spot.subtitle}
+                </Text>
                 <View style={styles.metaRow}>
                   <MetaPill icon="time-outline" text={getSpotDuration(spot) || "现场调整"} />
                   <MetaPill icon="sunny-outline" text={getSpotOpenHours(spot.id)} />
+                  <MetaPill
+                    icon="trail-sign-outline"
+                    text={spot.area || spot.theme || inferSpotCategory(spot)}
+                  />
                 </View>
                 <View style={styles.stopActionRow}>
                   <MiniButton
@@ -1520,12 +1692,11 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   heroCard: {
-    minHeight: 336,
+    minHeight: 304,
     borderRadius: 28,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: palette.border,
-    marginTop: 8,
   },
   heroImage: {
     ...StyleSheet.absoluteFillObject,
@@ -1637,6 +1808,77 @@ const styles = StyleSheet.create({
     padding: 16,
     overflow: "hidden",
   },
+  plannerCard: {
+    gap: 14,
+  },
+  plannerHead: {
+    gap: 4,
+  },
+  plannerTitle: {
+    color: palette.text,
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  routeOptionRow: {
+    gap: 12,
+    paddingRight: 24,
+  },
+  routeOptionCard: {
+    borderRadius: 22,
+    padding: 16,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: palette.border,
+    gap: 10,
+  },
+  routeOptionCardActive: {
+    backgroundColor: "rgba(249, 220, 123, 0.12)",
+    borderColor: "rgba(249, 220, 123, 0.28)",
+  },
+  routeOptionTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  routeOptionDays: {
+    color: palette.text,
+    fontSize: 26,
+    fontWeight: "800",
+  },
+  routeOptionDaysActive: {
+    color: palette.gold,
+  },
+  routeOptionBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(122,182,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(122,182,255,0.22)",
+  },
+  routeOptionBadgeActive: {
+    backgroundColor: "rgba(255,183,107,0.18)",
+    borderColor: "rgba(255,183,107,0.26)",
+  },
+  routeOptionBadgeText: {
+    color: palette.sky,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  routeOptionBadgeTextActive: {
+    color: palette.warm,
+  },
+  routeOptionTitle: {
+    color: palette.text,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  routeOptionNote: {
+    color: palette.subText,
+    fontSize: 13,
+    lineHeight: 20,
+  },
   logicCard: {
     paddingVertical: 18,
   },
@@ -1654,6 +1896,48 @@ const styles = StyleSheet.create({
   stopsWrap: {
     gap: 12,
   },
+  scheduleRow: {
+    gap: 12,
+    paddingRight: 24,
+  },
+  tripDayCard: {
+    borderRadius: 22,
+    padding: 16,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: palette.border,
+    gap: 10,
+  },
+  tripDayTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  tripDayPhase: {
+    color: palette.gold,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  tripDayDot: {
+    color: "rgba(255,255,255,0.28)",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  tripDayMode: {
+    color: palette.subText,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  tripDayTitle: {
+    color: palette.text,
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  tripDayBody: {
+    color: palette.subText,
+    fontSize: 14,
+    lineHeight: 21,
+  },
   stopCard: {
     flexDirection: "row",
     gap: 14,
@@ -1663,23 +1947,37 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 14,
   },
+  stopImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
   stopIndex: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    minWidth: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: "rgba(255, 157, 108, 0.18)",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 4,
+    paddingHorizontal: 8,
   },
   stopIndexText: {
     color: palette.route,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "800",
   },
   stopBody: {
     flex: 1,
     gap: 8,
+    minWidth: 0,
+  },
+  stopTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
   },
   rowBetween: {
     flexDirection: "row",
@@ -1689,14 +1987,14 @@ const styles = StyleSheet.create({
   },
   stopTitle: {
     color: palette.text,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
     flex: 1,
   },
   stopSubtitle: {
     color: palette.subText,
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 13,
+    lineHeight: 20,
   },
   metaRow: {
     flexDirection: "row",
