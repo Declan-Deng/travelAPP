@@ -10,6 +10,7 @@ type Props = {
   html: string;
   frameId: string;
   selectedSpotId?: string | null;
+  routeGeometry?: [number, number][];
   userLocation?: [number, number] | null;
   onSelectSpot: (spotId: string) => void;
   onTilesReady: () => void;
@@ -37,6 +38,7 @@ export default function SharedMapFrame({
   html,
   frameId,
   selectedSpotId,
+  routeGeometry,
   userLocation,
   onSelectSpot,
   onTilesReady,
@@ -66,6 +68,17 @@ export default function SharedMapFrame({
     frameWindow.__focusUserLocation(coords);
   }
 
+  function syncRouteGeometry(coords?: [number, number][]) {
+    const frameWindow = iframeRef.current?.contentWindow as
+      | (Window & {
+          __setRouteGeometry?: (nextCoords: [number, number][]) => void;
+        })
+      | null;
+
+    if (!frameWindow?.__setRouteGeometry) return;
+    frameWindow.__setRouteGeometry(Array.isArray(coords) ? coords : []);
+  }
+
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (event.source !== iframeRef.current?.contentWindow) return;
@@ -92,6 +105,10 @@ export default function SharedMapFrame({
   }, [selectedSpotId]);
 
   useEffect(() => {
+    syncRouteGeometry(routeGeometry);
+  }, [routeGeometry]);
+
+  useEffect(() => {
     focusUserLocation(userLocation);
   }, [userLocation]);
 
@@ -102,7 +119,9 @@ export default function SharedMapFrame({
       srcDoc={html}
       onLoad={() => {
         syncSelectedSpot(selectedSpotId);
+        syncRouteGeometry(routeGeometry);
         focusUserLocation(userLocation);
+        setTimeout(onTilesReady, 700);
       }}
       style={iframeStyle}
     />

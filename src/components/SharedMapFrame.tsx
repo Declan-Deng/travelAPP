@@ -4,6 +4,7 @@ type Props = {
   html: string;
   frameId: string;
   selectedSpotId?: string | null;
+  routeGeometry?: [number, number][];
   userLocation?: [number, number] | null;
   onSelectSpot: (spotId: string) => void;
   onTilesReady: () => void;

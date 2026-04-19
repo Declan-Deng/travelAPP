@@ -8,7 +8,9 @@ type Spot = {
 type SharedMapConfig = {
   frameId: string;
   routeCoords: [number, number][];
+  routeGeometry?: [number, number][];
   mapMode: "route" | "focus" | "all";
+  selectedSpotId?: string | null;
   routeSpots: Spot[];
   extraSpots: Spot[];
   citySpots: Spot[];
@@ -130,9 +132,9 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
 
       @media (max-width: 640px) {
         .hongkong-route-marker {
-          width: 22px;
-          height: 22px;
-          font-size: 9px;
+          width: 20px;
+          height: 20px;
+          font-size: 8px;
         }
 
         .hongkong-extra-marker {
@@ -166,8 +168,15 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
       const map = L.map("map", {
         zoomControl: false,
         attributionControl: true,
-      }).setView(data.routeCoords[0] || [22.28194, 114.15806], 13);
+      }).setView(
+        (Array.isArray(data.routeGeometry) && data.routeGeometry[0]) ||
+          data.routeCoords[0] ||
+          [22.28194, 114.15806],
+        13
+      );
       let userMarker = null;
+      let routeLayer = null;
+      let currentRouteGeometry = Array.isArray(data.routeGeometry) ? data.routeGeometry : [];
 
       const tileLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
         attribution:
@@ -184,6 +193,35 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
           iconSize: size,
           iconAnchor: anchor,
         });
+      }
+
+      function clearRouteLayer() {
+        if (routeLayer) {
+          map.removeLayer(routeLayer);
+          routeLayer = null;
+        }
+      }
+
+      function drawRouteGeometry(coords, options = {}) {
+        clearRouteLayer();
+        if (!Array.isArray(coords) || coords.length < 2) return;
+
+        routeLayer = L.polyline(
+          coords,
+          {
+            color: options.color || "#ff9d6c",
+            weight: options.weight || 5,
+            opacity: options.opacity || 0.92,
+            dashArray: options.dashArray || null,
+            lineJoin: "round",
+            lineCap: "round",
+          }
+        ).addTo(map);
+
+        const bounds = routeLayer.getBounds();
+        if (bounds && bounds.isValid && bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [40, 40] });
+        }
       }
 
       const markersById = new Map();
@@ -230,6 +268,15 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
       }
 
       window.__setSelectedSpot = setActiveSpot;
+      window.__setRouteGeometry = function(coords) {
+        currentRouteGeometry = Array.isArray(coords) ? coords : [];
+        if (currentRouteGeometry.length > 1) {
+          drawRouteGeometry(currentRouteGeometry);
+        } else {
+          clearRouteLayer();
+        }
+        applyViewport();
+      };
       window.__focusUserLocation = function(coords) {
         if (!coords || !Array.isArray(coords) || coords.length < 2) return;
         map.setView(coords, Math.max(map.getZoom(), 15), {
@@ -248,11 +295,8 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
         }
       });
 
-      if (data.mapMode === "route" && data.routeCoords.length > 1) {
-        L.polyline(data.routeCoords, {
-          color: "#ff9d6c",
-          weight: 5,
-        }).addTo(map);
+      if (currentRouteGeometry.length > 1) {
+        drawRouteGeometry(currentRouteGeometry);
       }
 
       data.routeSpots.forEach((spot, index) => {
@@ -304,25 +348,45 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
         .filter((spot) => Array.isArray(spot.coords))
         .map((spot) => spot.coords);
 
-      if (data.mapMode === "route" && data.routeCoords.length > 1) {
-        map.fitBounds(data.routeCoords, { padding: [40, 40] });
-      } else if (visibleCoords.length > 1) {
-        map.fitBounds(visibleCoords, { padding: [40, 40] });
-      } else {
-        const selected = visibleCoords[0] || data.routeCoords[0];
-        if (selected) {
-          map.setView(selected, 15);
+      function applyViewport() {
+        const routeBounds = currentRouteGeometry.length > 1
+          ? currentRouteGeometry
+          : data.routeCoords;
+        if (routeBounds.length > 1) {
+          map.fitBounds(routeBounds, { padding: [40, 40] });
+        } else if (visibleCoords.length > 1) {
+          map.fitBounds(visibleCoords, { padding: [40, 40] });
+        } else {
+          const selected = visibleCoords[0] || data.routeCoords[0];
+          if (selected) {
+            map.setView(selected, 15);
+          }
         }
       }
 
+      function syncMapSize() {
+        map.invalidateSize();
+        setTimeout(() => {
+          map.invalidateSize();
+          applyViewport();
+        }, 240);
+      }
+
+      applyViewport();
+
       setTimeout(() => {
         setActiveSpot(
-          data.routeSpots[0]?.id ||
+          data.selectedSpotId ||
+            data.routeSpots[0]?.id ||
             data.extraSpots[0]?.id ||
             data.citySpots[0]?.id ||
             null
         );
+        syncMapSize();
       }, 0);
+
+      setTimeout(syncMapSize, 400);
+      window.addEventListener("resize", syncMapSize);
     </script>
   </body>
 </html>`;

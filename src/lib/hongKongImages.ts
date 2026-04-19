@@ -1,4 +1,4 @@
-export const citywalkImages = {
+export const hongKongImages = {
   "spot_detail_image_01.png": require("../../assets/hongkong/spot_detail_image_01.png"),
   "spot_detail_image_02.png": require("../../assets/hongkong/spot_detail_image_02.png"),
   "spot_detail_image_03.png": require("../../assets/hongkong/spot_detail_image_03.png"),
@@ -34,12 +34,12 @@ export const citywalkImages = {
   "spot_detail_image_33.png": require("../../assets/hongkong/spot_detail_image_33.png"),
 } as const;
 
-export type CitywalkImageKey = keyof typeof citywalkImages;
+export type HongKongImageKey = keyof typeof hongKongImages;
 
-export function getCitywalkImage(imageKey?: string | null) {
-  if (imageKey && imageKey in citywalkImages) {
-    return citywalkImages[imageKey as CitywalkImageKey];
+export function getHongKongImage(imageKey?: string | null) {
+  if (imageKey && imageKey in hongKongImages) {
+    return hongKongImages[imageKey as HongKongImageKey];
   }
 
-  return citywalkImages["spot_detail_image_04.png"];
+  return hongKongImages["spot_detail_image_04.png"];
 }

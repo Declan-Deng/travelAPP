@@ -12,11 +12,15 @@ type Spot = {
   subtitle?: string;
 };
 
+type LatLng = [number, number];
+
 type Props = {
   routeCoords: [number, number][];
   mapMode: "route" | "focus" | "all";
   mapTitle: string;
   mapKicker: string;
+  showLegend?: boolean;
+  immersive?: boolean;
   showDock?: boolean;
   bottomInset?: number;
   routeSpots: Spot[];
@@ -34,11 +38,110 @@ type Props = {
   getSpotRating: (spotId?: string | null) => number;
 };
 
+const routeGeometryCache = new Map<string, LatLng[]>();
+const routeGeometryPending = new Map<string, Promise<LatLng[]>>();
+
+function createPathKey(pathCoords: LatLng[]) {
+  return pathCoords
+    .map(([lat, lng]) => `${lat.toFixed(5)},${lng.toFixed(5)}`)
+    .join("|");
+}
+
+function normalizeGeometry(rawCoords: unknown): LatLng[] {
+  if (!Array.isArray(rawCoords)) return [];
+
+  return rawCoords
+    .map((point) => {
+      if (!Array.isArray(point) || point.length < 2) return null;
+      const lng = Number(point[0]);
+      const lat = Number(point[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return [lat, lng] as LatLng;
+    })
+    .filter((point): point is LatLng => Array.isArray(point));
+}
+
+async function fetchRouteLeg(start: LatLng, end: LatLng) {
+  const coordinates = `${start[1]},${start[0]};${end[1]},${end[0]}`;
+  const query = "?overview=full&geometries=geojson&steps=false";
+  const endpoints = [
+    `https://router.project-osrm.org/route/v1/foot/${coordinates}${query}`,
+    `https://router.project-osrm.org/route/v1/driving/${coordinates}${query}`,
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+
+      if (!response.ok) continue;
+
+      const json = (await response.json()) as {
+        routes?: Array<{
+          geometry?: {
+            coordinates?: unknown;
+          };
+        }>;
+      };
+      const geometry = normalizeGeometry(json.routes?.[0]?.geometry?.coordinates);
+      if (geometry.length > 1) {
+        return geometry;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return [start, end];
+}
+
+async function fetchRouteGeometry(pathCoords: LatLng[]) {
+  if (pathCoords.length < 2) return [];
+
+  const cacheKey = createPathKey(pathCoords);
+  const cached = routeGeometryCache.get(cacheKey);
+  if (cached) return cached;
+
+  const pending = routeGeometryPending.get(cacheKey);
+  if (pending) return pending;
+
+  const promise = Promise.all(
+    pathCoords.slice(0, -1).map((start, index) =>
+      fetchRouteLeg(start, pathCoords[index + 1])
+    )
+  )
+    .then((segments) => {
+      const geometry = segments.reduce<LatLng[]>((acc, segment, index) => {
+        segment.forEach((point, pointIndex) => {
+          if (index > 0 && pointIndex === 0) return;
+          acc.push(point);
+        });
+        return acc;
+      }, []);
+
+      const merged = geometry.length > 1 ? geometry : pathCoords;
+      routeGeometryCache.set(cacheKey, merged);
+      routeGeometryPending.delete(cacheKey);
+      return merged;
+    })
+    .catch(() => {
+      routeGeometryPending.delete(cacheKey);
+      return pathCoords;
+    });
+
+  routeGeometryPending.set(cacheKey, promise);
+  return promise;
+}
+
 export default function MapSurface({
   routeCoords,
   mapMode,
   mapTitle,
   mapKicker,
+  showLegend = true,
+  immersive = false,
   showDock = true,
   bottomInset = 0,
   routeSpots,
@@ -60,7 +163,9 @@ export default function MapSurface({
     []
   );
   const [tilesReady, setTilesReady] = useState(false);
+  const [routeGeometry, setRouteGeometry] = useState<LatLng[]>([]);
   const selectedSpotId = selectedSpot?.id ?? null;
+  const routeKey = useMemo(() => createPathKey(routeCoords), [routeCoords]);
   const selectedKind = useMemo(() => {
     if (!selectedSpotId) return "当前景点";
     if (routeSpots.some((spot) => spot.id === selectedSpotId)) return "当前路线";
@@ -69,31 +174,78 @@ export default function MapSurface({
     return "当前景点";
   }, [citySpots, extraSpots, routeSpots, selectedSpotId]);
 
+  useEffect(() => {
+    let active = true;
+
+    if (routeCoords.length < 2) {
+      setRouteGeometry([]);
+      return () => {
+        active = false;
+      };
+    }
+
+    const cached = routeGeometryCache.get(routeKey);
+    if (cached) {
+      setRouteGeometry(cached);
+      return () => {
+        active = false;
+      };
+    }
+
+    setRouteGeometry([]);
+
+    fetchRouteGeometry(routeCoords).then((geometry) => {
+      if (active) {
+        setRouteGeometry(geometry);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [routeCoords, routeKey]);
+
   const html = useMemo(
     () =>
       buildSharedMapDocument({
         frameId,
         routeCoords,
+        routeGeometry: [],
         mapMode,
+        selectedSpotId,
         routeSpots,
         extraSpots,
         citySpots,
         userLocation,
       }),
-    [citySpots, extraSpots, frameId, mapMode, routeCoords, routeSpots, userLocation]
+    [
+      citySpots,
+      extraSpots,
+      frameId,
+      mapMode,
+      routeCoords,
+      routeSpots,
+      userLocation,
+    ]
   );
 
   useEffect(() => {
     setTilesReady(false);
   }, [html]);
 
+  useEffect(() => {
+    const timeout = setTimeout(() => setTilesReady(true), 1400);
+    return () => clearTimeout(timeout);
+  }, [html]);
+
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, immersive && styles.wrapImmersive]}>
       <View style={styles.mapCanvas}>
         <SharedMapFrame
           html={html}
           frameId={frameId}
           selectedSpotId={selectedSpotId}
+          routeGeometry={routeGeometry}
           userLocation={userLocation}
           onSelectSpot={onSelectSpot}
           onTilesReady={() => setTilesReady(true)}
@@ -108,18 +260,20 @@ export default function MapSurface({
           </View>
         )}
 
-        <View style={styles.topOverlay}>
-          <View style={styles.legendCard}>
-            <LinearGradient
-              colors={["rgba(126, 220, 208, 0.22)", "rgba(122, 182, 255, 0.06)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.legendGlow}
-            />
-            <Text style={styles.legendKicker}>{mapKicker}</Text>
-            <Text style={styles.legendTitle}>{mapTitle}</Text>
+        {showLegend && (
+          <View style={styles.topOverlay}>
+            <View style={styles.legendCard}>
+              <LinearGradient
+                colors={["rgba(126, 220, 208, 0.22)", "rgba(122, 182, 255, 0.06)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.legendGlow}
+              />
+              <Text style={styles.legendKicker}>{mapKicker}</Text>
+              <Text style={styles.legendTitle}>{mapTitle}</Text>
+            </View>
           </View>
-        </View>
+        )}
 
         {showDock && (
           <View style={[styles.bottomOverlay, { bottom: 14 + bottomInset }]}>
@@ -235,6 +389,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     backgroundColor: "#08111d",
+  },
+  wrapImmersive: {
+    borderRadius: 0,
+    borderWidth: 0,
   },
   mapCanvas: {
     flex: 1,
