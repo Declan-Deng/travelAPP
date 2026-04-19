@@ -331,6 +331,36 @@ function App() {
   ).current;
   const mapSheetOffsetRef = useRef(mapSheetCollapsedOffset);
   const mapSheetDragStart = useRef(mapSheetCollapsedOffset);
+  const screenTransition = useRef(new Animated.Value(0)).current;
+  const tabTransition = useRef(new Animated.Value(0)).current;
+  const screenAnimatedStyle = useMemo(
+    () => ({
+      opacity: screenTransition,
+      transform: [
+        {
+          translateY: screenTransition.interpolate({
+            inputRange: [0, 1],
+            outputRange: [18, 0],
+          }),
+        },
+      ],
+    }),
+    [screenTransition]
+  );
+  const tabAnimatedStyle = useMemo(
+    () => ({
+      opacity: tabTransition,
+      transform: [
+        {
+          translateY: tabTransition.interpolate({
+            inputRange: [0, 1],
+            outputRange: [14, 0],
+          }),
+        },
+      ],
+    }),
+    [tabTransition]
+  );
 
   const selectedSpot = getSpotById(selectedSpotId);
   const selectedRegion = useMemo(
@@ -380,6 +410,24 @@ function App() {
     mapSheetOffset.setValue(nextValue);
     mapSheetOffsetRef.current = nextValue;
   }, [mapSheetCollapsedOffset, mapSheetExpanded, mapSheetOffset]);
+
+  useEffect(() => {
+    screenTransition.setValue(0);
+    Animated.timing(screenTransition, {
+      toValue: 1,
+      duration: 320,
+      useNativeDriver: true,
+    }).start();
+  }, [currentScreen, screenTransition]);
+
+  useEffect(() => {
+    tabTransition.setValue(0);
+    Animated.timing(tabTransition, {
+      toValue: 1,
+      duration: 240,
+      useNativeDriver: true,
+    }).start();
+  }, [currentTab, routeId, tabTransition]);
 
   function snapMapSheet(expanded: boolean) {
     setMapSheetExpanded(expanded);
@@ -1639,14 +1687,16 @@ function App() {
           colors={["#163356", "#0b1829", "#091524"]}
           style={styles.root}
         >
-          <RouteSelectionScreen
-            routes={routes}
-            selectedRouteId={routeId}
-            canClose={hasEnteredMain}
-            bottomInset={Math.max(insets.bottom, 20)}
-            onClose={() => setCurrentScreen("main")}
-            onSelectRoute={chooseRoute}
-          />
+          <Animated.View style={[styles.screenStage, screenAnimatedStyle]}>
+            <RouteSelectionScreen
+              routes={routes}
+              selectedRouteId={routeId}
+              canClose={hasEnteredMain}
+              bottomInset={Math.max(insets.bottom, 20)}
+              onClose={() => setCurrentScreen("main")}
+              onSelectRoute={chooseRoute}
+            />
+          </Animated.View>
         </LinearGradient>
       </SafeAreaView>
     );
@@ -1659,11 +1709,19 @@ function App() {
         colors={["#163356", "#0b1829", "#091524"]}
         style={styles.root}
       >
-        <View style={[styles.contentArea, { paddingBottom: tabBarReservedSpace }]}>
-          {currentTab === "route" && renderRouteTab()}
-          {currentTab === "map" && renderMapTab()}
-          {currentTab === "discover" && renderDiscoverTab()}
-        </View>
+        <Animated.View style={[styles.screenStage, screenAnimatedStyle]}>
+          <Animated.View
+            style={[
+              styles.contentArea,
+              { paddingBottom: tabBarReservedSpace },
+              tabAnimatedStyle,
+            ]}
+          >
+            {currentTab === "route" && renderRouteTab()}
+            {currentTab === "map" && renderMapTab()}
+            {currentTab === "discover" && renderDiscoverTab()}
+          </Animated.View>
+        </Animated.View>
 
         <View
           style={[
@@ -2700,6 +2758,9 @@ const styles = StyleSheet.create({
     backgroundColor: palette.bg,
   },
   root: {
+    flex: 1,
+  },
+  screenStage: {
     flex: 1,
   },
   contentArea: {
