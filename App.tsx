@@ -6,6 +6,7 @@ import {
   Alert,
   Animated,
   Image,
+  Keyboard,
   Modal,
   PanResponder,
   Pressable,
@@ -84,11 +85,11 @@ const uiCopy = {
   extendGuide: "替代路线",
   extendMapAction: "在地图查看",
   guideKicker: "出发前",
-  guideTitle: "图册、故事线与准备信息",
-  guideNote: "把灵感、路线故事和临出发要看的信息收在一起。",
-  discoverKicker: "发现香港",
-  discoverTitle: "去哪玩，也顺手把出发前的信息看完",
-  discoverNote: "上半段看玩法和片区，下半段收图册、故事线和准备信息。",
+  guideTitle: "出发前信息总览",
+  guideNote: "把图册、路线解读、出行准备和参考资料分开看，会更清楚。",
+  discoverKicker: "更多玩法",
+  discoverTitle: "发现香港",
+  discoverNote: "一站式解锁玩法、片区与出行准备信息。",
 };
 
 const glyphMap: Record<string, string> = {
@@ -105,6 +106,7 @@ const glyphMap: Record<string, string> = {
   "document-text-outline": "☰",
   "location-outline": "⌾",
   "navigate-outline": "➤",
+  "arrow-back-outline": "←",
   "close-outline": "×",
   "albums-outline": "▤",
   "book-outline": "☷",
@@ -118,6 +120,7 @@ function clamp(value: number, min: number, max: number) {
 type TabKey = "route" | "map" | "discover";
 type AppScreen = "picker" | "main";
 type ExtendView = "index" | "lp" | "guide";
+type MapFocusKind = "spot" | "collection" | null;
 type RouteLayerKey =
   | "schedule"
   | "logic"
@@ -266,6 +269,7 @@ function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>("picker");
   const [hasEnteredMain, setHasEnteredMain] = useState(false);
   const [currentTab, setCurrentTab] = useState<TabKey>("route");
+  const contentBottomInset = currentTab === "map" ? 0 : tabBarReservedSpace;
   const [routeId, setRouteId] = useState<string>(recommendedRoute.id);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [extendView, setExtendView] = useState<ExtendView>("index");
@@ -300,6 +304,16 @@ function App() {
     });
   }, [currentRoute, routeStops]);
   const activeDayGroup = routeDayGroups[selectedDayIndex] || routeDayGroups[0] || null;
+  const compactDayChipWidth =
+    routeDayGroups.length <= 3
+      ? Math.max(
+          Math.floor(
+            (contentWidth - Math.max(routeDayGroups.length - 1, 0) * 10) /
+              routeDayGroups.length
+          ),
+          102
+        )
+      : null;
   const extraOldCitySpots = useMemo(
     () =>
       Object.values(places).filter(
@@ -312,6 +326,7 @@ function App() {
   );
   const [detailSpotId, setDetailSpotId] = useState<string | null>(null);
   const [mapMode, setMapMode] = useState<"route" | "focus" | "all">("route");
+  const [mapFocusKind, setMapFocusKind] = useState<MapFocusKind>(null);
   const [focusedSpotIds, setFocusedSpotIds] = useState<string[]>(
     currentRoute.stops
   );
@@ -444,9 +459,13 @@ function App() {
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gestureState) =>
-          Math.abs(gestureState.dy) > 6,
+          Math.abs(gestureState.dy) > 6 &&
+          Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
         onPanResponderGrant: () => {
-          mapSheetDragStart.current = mapSheetOffsetRef.current;
+          mapSheetOffset.stopAnimation((value) => {
+            mapSheetDragStart.current = value;
+            mapSheetOffsetRef.current = value;
+          });
         },
         onPanResponderMove: (_, gestureState) => {
           const nextValue = clamp(
@@ -470,6 +489,7 @@ function App() {
         onPanResponderTerminate: () => {
           snapMapSheet(mapSheetOffsetRef.current < mapSheetCollapsedOffset * 0.5);
         },
+        onPanResponderTerminationRequest: () => false,
       }),
     [mapSheetCollapsedOffset, mapSheetOffset]
   );
@@ -495,6 +515,7 @@ function App() {
   useEffect(() => {
     setSelectedDayIndex(0);
     if (mapMode === "route") {
+      setMapFocusKind(null);
       setSelectedSpotId(currentRoute.stops[0]);
       setFocusedSpotIds(currentRoute.stops);
       setMapTitle(currentRoute.label);
@@ -503,9 +524,35 @@ function App() {
     }
 
     if (mapMode === "all") {
+      setMapFocusKind(null);
       setSelectedSpotId(currentRoute.stops[0]);
     }
   }, [currentRoute, mapMode]);
+
+  function getSpotContextIds(spotId: string) {
+    if (currentRoute.stops.includes(spotId)) {
+      return currentRoute.stops;
+    }
+
+    if (places[spotId]) {
+      return [
+        ...new Set([
+          ...currentRoute.stops,
+          ...extraOldCitySpots.map((spot: any) => spot.id),
+        ]),
+      ];
+    }
+
+    const regionalGroup = regionalSpotCollections.find((section: any) =>
+      section.spots.some((spot: any) => spot.id === spotId)
+    );
+
+    if (regionalGroup) {
+      return regionalGroup.spots.map((spot: any) => spot.id);
+    }
+
+    return [spotId];
+  }
 
   const mapVisibleSpots = useMemo(() => {
     if (mapMode === "route") {
@@ -524,33 +571,38 @@ function App() {
       };
     }
 
-    const focused = focusedSpotIds
-      .map((spotId) => getSpotById(spotId))
-      .filter(Boolean);
+    const focusedSpotSet = new Set(focusedSpotIds);
 
     return {
-      route: focused.filter((spot: any) => currentRoute.stops.includes(spot.id)),
-      extras: focused.filter(
-        (spot: any) =>
-          !currentRoute.stops.includes(spot.id) && places[spot.id]
+      route: routeStops.filter((spot: any) => focusedSpotSet.has(spot.id)),
+      extras: extraOldCitySpots.filter((spot: any) =>
+        focusedSpotSet.has(spot.id)
       ),
-      city: focused.filter((spot: any) => !places[spot.id]),
+      city: cityOnlySpots.filter((spot: any) => focusedSpotSet.has(spot.id)),
     };
-  }, [currentRoute, extraOldCitySpots, focusedSpotIds, mapMode, routeStops]);
+  }, [cityOnlySpots, extraOldCitySpots, focusedSpotIds, mapMode, routeStops]);
 
   const mapPathCoords = useMemo(() => {
     if (mapMode === "route") {
       return routeCoords;
     }
 
-    if (mapMode === "focus" && focusedSpotIds.length > 1) {
+    if (mapMode === "focus" && mapFocusKind === "spot") {
+      const focusId = selectedSpotId || focusedSpotIds[0];
+      if (focusId && (currentRoute.stops.includes(focusId) || places[focusId])) {
+        return routeCoords;
+      }
+      return [];
+    }
+
+    if (mapMode === "focus" && mapFocusKind === "collection" && focusedSpotIds.length > 1) {
       return focusedSpotIds
         .map((spotId) => getSpotById(spotId)?.coords as [number, number] | undefined)
         .filter((coords): coords is [number, number] => Array.isArray(coords));
     }
 
     return [];
-  }, [focusedSpotIds, mapMode, routeCoords]);
+  }, [currentRoute.stops, focusedSpotIds, mapFocusKind, mapMode, routeCoords, selectedSpotId]);
 
   useEffect(() => {
     if (currentTab !== "map") return;
@@ -564,6 +616,7 @@ function App() {
   function focusRoute() {
     setCurrentTab("map");
     setMapMode("route");
+    setMapFocusKind(null);
     setFocusedSpotIds(currentRoute.stops);
     setSelectedSpotId(currentRoute.stops[0]);
     setMapTitle(currentRoute.label);
@@ -573,6 +626,7 @@ function App() {
   function focusAllCity() {
     setCurrentTab("map");
     setMapMode("all");
+    setMapFocusKind(null);
     setFocusedSpotIds(allSpots.map((spot: any) => spot.id));
     setSelectedSpotId(currentRoute.stops[0]);
     setMapTitle(uiCopy.allCityTitle);
@@ -585,7 +639,8 @@ function App() {
 
     setCurrentTab(options?.tab || "map");
     setMapMode("focus");
-    setFocusedSpotIds([spotId]);
+    setMapFocusKind("spot");
+    setFocusedSpotIds(getSpotContextIds(spotId));
     setSelectedSpotId(spotId);
     setMapTitle(spot.name);
     setMapKicker(options?.kicker || inferSpotCategory(spot));
@@ -597,10 +652,23 @@ function App() {
 
     setCurrentTab("map");
     setMapMode("focus");
+    setMapFocusKind("collection");
     setFocusedSpotIds(spotIds);
     setSelectedSpotId(spotIds[0]);
     setMapTitle(title);
     setMapKicker(kicker);
+  }
+
+  function handleMapSpotSelect(spotId: string) {
+    const nextDayIndex = routeDayGroups.findIndex((group: any) =>
+      group.spots.some((spot: any) => spot.id === spotId)
+    );
+
+    if (nextDayIndex >= 0) {
+      setSelectedDayIndex(nextDayIndex);
+    }
+
+    focusSpot(spotId);
   }
 
   function chooseRoute(nextRouteId: string) {
@@ -626,26 +694,26 @@ function App() {
     () => [
       {
         key: "schedule" as RouteLayerKey,
-        kicker: "先扫节奏",
+        kicker: "快速预览",
         title: "每日安排",
-        note: `${currentRoute.schedule.length} 段，先看每天怎么排`,
+        note: `${currentRoute.schedule.length} 段，先把每天的大致安排扫一遍`,
       },
       {
         key: "logic" as RouteLayerKey,
-        kicker: "看懂路线",
+        kicker: "理清路线",
         title: "路线逻辑",
-        note: `${currentRoute.panels.length} 个判断，帮你快速理解这条线`,
+        note: `${currentRoute.panels.length} 个重点，帮你把这条线的安排看明白`,
       },
       {
         key: "stops" as RouteLayerKey,
-        kicker: "往下细看",
-        title: "站点清单",
-        note: `${routeStops.length} 站，评级、开放参考和地图入口都在里面`,
+        kicker: "途经点",
+        title: "景点详情",
+        note: `${routeStops.length} 个途经点，评级、开放参考和地图入口都在里面`,
       },
       {
         key: "prep" as RouteLayerKey,
-        kicker: "出发前",
-        title: "出发信息",
+        kicker: "出行准备",
+        title: "出发必读",
         note: "把准备事项、开放时间说明和评级口径收在一起",
       },
     ],
@@ -656,26 +724,26 @@ function App() {
     () => [
       {
         key: "gallery" as RouteLayerKey,
-        kicker: "看画面",
-        title: "图册亮点",
-        note: `${galleryItems.length} 组画面，适合先建立这条线的气质`,
+        kicker: "图册灵感",
+        title: "图册灵感",
+        note: `${galleryItems.length} 组画面，先建立这条线的气质和节奏`,
       },
       {
         key: "story" as RouteLayerKey,
-        kicker: "看叙事",
-        title: "路线故事线",
-        note: `${currentRoute.chapters.length} 段，解释为什么这样走`,
+        kicker: "路线解读",
+        title: "路线解读",
+        note: `${currentRoute.chapters.length} 段，解释为什么这样走会更顺`,
       },
       {
         key: "prep" as RouteLayerKey,
-        kicker: "看准备",
-        title: "出发信息",
+        kicker: "出行准备",
+        title: "出行准备",
         note: `${currentRoute.prep.length} 条提醒，减少临时改计划`,
       },
       {
         key: "sources" as RouteLayerKey,
-        kicker: "看出处",
-        title: "资料来源",
+        kicker: "参考资料",
+        title: "参考资料",
         note: "把这次路线用到的公开资料和本地素材集中放在一层",
       },
     ],
@@ -907,10 +975,7 @@ function App() {
           note="主界面现在只展示当前已选方案；如需切换天数，请先回到方案选择页。"
         />
 
-        <Pressable
-          style={styles.currentPlanCard}
-          onPress={openRoutePickerPage}
-        >
+        <View style={styles.currentPlanCard}>
           <Image
             source={getHongKongImage(currentRoute.heroImage)}
             style={styles.currentPlanImage}
@@ -931,8 +996,14 @@ function App() {
               {currentRoute.lead}
             </Text>
             <View style={styles.heroStatsRow}>
-              <StatChip label="站点" value={`${currentRoute.stops.length} 站`} />
-              <StatChip label="节奏" value={currentRoute.mode} />
+              <StatChip
+                label={currentRoute.stopLabel || "途径点"}
+                value={`${currentRoute.stops.length} 个`}
+              />
+              <StatChip
+                label={currentRoute.modeLabel || "出行节奏"}
+                value={currentRoute.mode}
+              />
             </View>
             <View style={styles.currentPlanFooter}>
               <View style={{ flex: 1 }}>
@@ -941,18 +1012,21 @@ function App() {
                   {currentRoute.note}
                 </Text>
               </View>
-              <View style={styles.currentPlanAction}>
+              <Pressable
+                style={styles.currentPlanAction}
+                onPress={openRoutePickerPage}
+              >
                 <Text style={styles.currentPlanActionText}>重新选方案</Text>
-              </View>
+              </Pressable>
             </View>
           </View>
-        </Pressable>
+        </View>
 
         {activeDayGroup && (
           <GlassCard style={styles.dayPlannerCard}>
             <View style={styles.currentRouteHead}>
               <View style={styles.currentRouteCopy}>
-                <Text style={styles.sectionEyebrow}>按天看节奏</Text>
+                <Text style={styles.sectionEyebrow}>每日出行节奏</Text>
                 <Text style={styles.currentRouteTitle}>
                   {activeDayGroup.phase} · {activeDayGroup.title}
                 </Text>
@@ -972,13 +1046,19 @@ function App() {
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.dayChipRow}
+              contentContainerStyle={[
+                styles.dayChipRow,
+                compactDayChipWidth ? styles.dayChipRowCompact : null,
+              ]}
             >
               {routeDayGroups.map((item: any) => (
                 <Pressable
                   key={`${currentRoute.id}-${item.index}`}
                   style={[
                     styles.dayChip,
+                    compactDayChipWidth
+                      ? { width: compactDayChipWidth, minWidth: compactDayChipWidth }
+                      : null,
                     selectedDayIndex === item.index && styles.dayChipActive,
                   ]}
                   onPress={() => setSelectedDayIndex(item.index)}
@@ -1041,9 +1121,9 @@ function App() {
         )}
 
         <SectionTitle
-          kicker="继续查看"
-          title="从四个入口继续看"
-          note="安排、逻辑、站点、出发信息分开看。"
+          kicker="更多行程信息"
+          title="更多行程信息"
+          note="从 4 个维度，帮你把行程安排、路线逻辑、途经点与出行准备都理清楚。"
         />
 
         <View style={styles.layerEntryGridWide}>
@@ -1069,7 +1149,11 @@ function App() {
 
   function renderMapTab() {
     const showingFocusedSpot =
-      mapMode === "focus" && !!selectedSpot && focusedSpotIds.length === 1;
+      mapMode === "focus" && mapFocusKind === "spot" && !!selectedSpot;
+    const runMapSearch = () => {
+      setSearchQuery((current) => current.trim());
+      Keyboard.dismiss();
+    };
 
     return (
       <View style={[styles.mapTabShell, { marginTop: -insets.top }]}>
@@ -1088,7 +1172,7 @@ function App() {
             citySpots={mapVisibleSpots.city}
             selectedSpot={selectedSpot}
             userLocation={userLocation}
-            onSelectSpot={(spotId: string) => setSelectedSpotId(spotId)}
+            onSelectSpot={handleMapSpotSelect}
             onOpenDetail={(spotId: string) => setDetailSpotId(spotId)}
             onFocusRoute={focusRoute}
             onFocusAllCity={focusAllCity}
@@ -1108,14 +1192,20 @@ function App() {
 
           <View style={[styles.mapFloatingTop, { top: insets.top + 8 }]}>
             <View style={styles.mapFloatingHeader}>
-              <View style={styles.mapHeaderCopy}>
-                <Text style={styles.sectionEyebrow}>地图与搜索</Text>
-                <Text style={styles.mapHeaderTitle}>
-                  {mapMode === "focus" ? mapTitle : currentRoute.badge}
-                </Text>
-                <Text numberOfLines={1} style={styles.sectionHint}>
-                  {mapMode === "route" ? uiCopy.mapHintRoute : uiCopy.mapHintFocus}
-                </Text>
+              <View style={styles.mapHeaderMain}>
+                <SmallIconButton
+                  icon="arrow-back-outline"
+                  onPress={() => setCurrentTab("route")}
+                />
+                <View style={styles.mapHeaderCopy}>
+                  <Text style={styles.sectionEyebrow}>地图与搜索</Text>
+                  <Text style={styles.mapHeaderTitle}>
+                    {mapMode === "focus" ? mapTitle : currentRoute.badge}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.sectionHint}>
+                    {mapMode === "route" ? uiCopy.mapHintRoute : uiCopy.mapHintFocus}
+                  </Text>
+                </View>
               </View>
               <View style={styles.mapHeaderActions}>
                 <SmallIconButton
@@ -1126,7 +1216,7 @@ function App() {
                     }
                   }}
                 />
-                <SmallIconButton icon="expand-outline" onPress={focusAllCity} />
+                <HeaderActionButton label="查看全部点位" onPress={focusAllCity} />
               </View>
             </View>
 
@@ -1136,10 +1226,16 @@ function App() {
                 <TextInput
                   value={searchQuery}
                   onChangeText={setSearchQuery}
+                  onSubmitEditing={runMapSearch}
+                  returnKeyType="search"
                   placeholder="搜索景点、海滨、街区、离岛或博物馆"
                   placeholderTextColor={palette.subText}
                   style={styles.searchInput}
                 />
+                <Pressable style={styles.mapSearchButton} onPress={runMapSearch}>
+                  <Glyph name="search-outline" size={15} color={palette.text} />
+                  <Text style={styles.mapSearchButtonText}>搜索</Text>
+                </Pressable>
               </View>
               {!!searchQuery && (
                 <ScrollView
@@ -1188,8 +1284,15 @@ function App() {
               ]}
             >
               <LinearGradient
-                colors={["rgba(11, 25, 42, 0.98)", "rgba(11, 25, 42, 0.94)"]}
+                colors={["rgba(32, 50, 73, 0.76)", "rgba(17, 31, 50, 0.62)"]}
                 style={StyleSheet.absoluteFillObject}
+              />
+              <LinearGradient
+                colors={["rgba(255,255,255,0.18)", "rgba(255,255,255,0.02)", "transparent"]}
+                start={{ x: 0.12, y: 0 }}
+                end={{ x: 0.92, y: 0.78 }}
+                style={styles.mapSheetGlassGlow}
+                pointerEvents="none"
               />
 
               <View
@@ -1199,7 +1302,10 @@ function App() {
                 <View style={styles.mapSheetHandle} />
               </View>
 
-              <View style={styles.mapSheetPeekBody}>
+              <View
+                style={styles.mapSheetPeekBody}
+                {...mapSheetPanResponder.panHandlers}
+              >
                 <View style={styles.rowBetween}>
                   <View style={styles.mapSheetPeekCopy}>
                     <Text style={styles.featureSource}>
@@ -1257,7 +1363,10 @@ function App() {
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.dayChipRow}
+                      contentContainerStyle={[
+                        styles.dayChipRow,
+                        compactDayChipWidth ? styles.dayChipRowCompact : null,
+                      ]}
                     >
                       {routeDayGroups.map((item: any) => (
                         <Pressable
@@ -1266,6 +1375,9 @@ function App() {
                             styles.dayChip,
                             selectedDayIndex === item.index && styles.dayChipActive,
                             styles.mapDayChip,
+                            compactDayChipWidth
+                              ? { width: compactDayChipWidth, minWidth: compactDayChipWidth }
+                              : null,
                           ]}
                           onPress={() => {
                             setSelectedDayIndex(item.index);
@@ -1419,42 +1531,6 @@ function App() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          decelerationRate="fast"
-          snapToAlignment="start"
-          snapToInterval={extendPreviewWidth + 12}
-          contentContainerStyle={styles.extendPreviewRow}
-        >
-          {cityRecommendations.slice(0, 4).map((item: any) => (
-            <Pressable
-              key={item.title}
-              style={[styles.extendPreviewCard, { width: extendPreviewWidth }]}
-              onPress={() => {
-                setExtendView("guide");
-                setExtendLayer("guide");
-              }}
-            >
-              <Image
-                source={getHongKongImage(item.image)}
-                style={styles.extendPreviewImage}
-              />
-              <LinearGradient
-                colors={["transparent", "rgba(6,17,29,0.94)"]}
-                style={styles.routeShowcaseShade}
-              />
-              <View style={styles.extendPreviewBody}>
-                <Text style={styles.featureSource}>{item.area}</Text>
-                <Text style={styles.extendPreviewTitle}>{item.title}</Text>
-                <Text numberOfLines={2} style={styles.extendPreviewText}>
-                  {item.text}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.segmentRow}
         >
           {[
@@ -1519,7 +1595,7 @@ function App() {
           </ScrollView>
         )}
 
-        {extendView !== "index" && !!extendPreviewItems.length && (
+        {extendView === "lp" && !!extendPreviewItems.length && (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -1713,7 +1789,7 @@ function App() {
           <Animated.View
             style={[
               styles.contentArea,
-              { paddingBottom: tabBarReservedSpace },
+              { paddingBottom: contentBottomInset },
               tabAnimatedStyle,
             ]}
           >
@@ -1729,6 +1805,13 @@ function App() {
             { bottom: tabBarBottom },
           ]}
         >
+          <LinearGradient
+            colors={["rgba(255,255,255,0.18)", "rgba(255,255,255,0.05)"]}
+            start={{ x: 0.1, y: 0 }}
+            end={{ x: 0.9, y: 1 }}
+            style={styles.tabBarGlass}
+            pointerEvents="none"
+          />
           <TabButton
             icon="walk-outline"
             label="行程"
@@ -1903,8 +1986,14 @@ function RouteSelectionScreen({
                 {route.lead}
               </Text>
               <View style={styles.heroStatsRow}>
-                <StatChip label="站点" value={`${route.stops.length} 站`} />
-                <StatChip label="节奏" value={route.mode} />
+                <StatChip
+                  label={route.stopLabel || "途径点"}
+                  value={`${route.stops.length} 个`}
+                />
+                <StatChip
+                  label={route.modeLabel || "出行节奏"}
+                  value={route.mode}
+                />
               </View>
               <View style={styles.selectionRouteFooter}>
                 <View style={{ flex: 1 }}>
@@ -1948,38 +2037,38 @@ function RouteLayerModal({
 
   const config: Record<RouteLayerKey, { kicker: string; title: string; note: string }> = {
     schedule: {
-      kicker: "每日安排",
-      title: `${route.label}怎么排`,
-      note: "先把每天的大致节奏扫一遍，再决定哪里需要加减。",
+      kicker: "快速预览",
+      title: "每日安排",
+      note: "先把每天的大致安排扫一遍，再决定哪里需要加减。",
     },
     logic: {
-      kicker: "路线逻辑",
-      title: "这条线为什么这样走",
+      kicker: "理清路线",
+      title: "路线逻辑",
       note: "这里会把路线重点、适合人群和节奏提醒放在一起。",
     },
     stops: {
-      kicker: "站点清单",
-      title: "按站点往下看",
-      note: "每一站都能继续开详情或直接跳地图。",
+      kicker: "途经点",
+      title: "景点详情",
+      note: "每个途经点都能继续看详情或直接跳地图。",
     },
     gallery: {
-      kicker: "路线图册",
-      title: "先用画面建立感觉",
+      kicker: "图册灵感",
+      title: "图册灵感",
       note: "适合先看一眼这条路线的气质，再决定想去哪里深看。",
     },
     story: {
-      kicker: "路线故事线",
-      title: "这条路线的叙事顺序",
+      kicker: "路线解读",
+      title: "路线解读",
       note: "把一天或几天的观看顺序梳理成更容易理解的段落。",
     },
     prep: {
-      kicker: "出发信息",
-      title: "出发前先看这层",
+      kicker: "出行准备",
+      title: "出发必读",
       note: "把准备事项、开放时间口径和评级说明都压在一层里。",
     },
     sources: {
-      kicker: "资料来源",
-      title: "这次用到的资料",
+      kicker: "参考资料",
+      title: "参考资料",
       note: "方便你回头核对出处，也便于后续继续补资料。",
     },
   };
@@ -2369,9 +2458,18 @@ function ExtendLayerModal({
                       fadeDuration={0}
                     />
                     <View style={styles.featureCompactBody}>
-                      <View style={styles.rowBetween}>
-                        <Text style={styles.featureTitle}>{item.title}</Text>
-                        <Text style={styles.featureSource}>{item.area}</Text>
+                      <View style={styles.featureCompactHeader}>
+                        <View style={styles.featureSourceBadge}>
+                          <Text
+                            numberOfLines={2}
+                            style={styles.featureSourceBadgeText}
+                          >
+                            {item.area}
+                          </Text>
+                        </View>
+                        <Text style={[styles.featureTitle, styles.featureTitleTight]}>
+                          {item.title}
+                        </Text>
                       </View>
                       <Text numberOfLines={3} style={styles.cardText}>
                         {item.text}
@@ -2627,6 +2725,21 @@ function SmallIconButton({
   return (
     <Pressable style={styles.smallIconButton} onPress={onPress}>
       <Glyph name={icon} size={18} color={palette.text} />
+    </Pressable>
+  );
+}
+
+function HeaderActionButton({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.headerActionButton} onPress={onPress}>
+      <Glyph name="apps-outline" size={15} color={palette.text} />
+      <Text style={styles.headerActionButtonText}>{label}</Text>
     </Pressable>
   );
 }
@@ -3112,10 +3225,13 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingRight: 18,
   },
+  dayChipRowCompact: {
+    paddingRight: 0,
+  },
   dayChip: {
-    minWidth: 126,
+    minWidth: 150,
     borderRadius: 18,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 9,
     backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
@@ -3128,7 +3244,8 @@ const styles = StyleSheet.create({
   },
   dayChipPhase: {
     color: palette.subText,
-    fontSize: 12,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: "800",
   },
   dayChipPhaseActive: {
@@ -3136,7 +3253,8 @@ const styles = StyleSheet.create({
   },
   dayChipTitle: {
     color: palette.text,
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: "700",
   },
   dayChipTitleActive: {
@@ -3425,6 +3543,13 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 12,
   },
+  mapHeaderMain: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    flex: 1,
+    minWidth: 0,
+  },
   mapSearchFloat: {
     padding: 10,
     borderRadius: 22,
@@ -3448,13 +3573,17 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(10, 22, 36, 0.72)",
+    borderColor: "rgba(255,255,255,0.24)",
+    backgroundColor: "rgba(14, 28, 46, 0.42)",
     shadowColor: "#000",
-    shadowOpacity: 0.28,
-    shadowRadius: 28,
+    shadowOpacity: 0.24,
+    shadowRadius: 34,
     shadowOffset: { width: 0, height: -12 },
     elevation: 22,
+  },
+  mapSheetGlassGlow: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.92,
   },
   mapSheetHandleZone: {
     paddingTop: 10,
@@ -3466,7 +3595,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 5,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.24)",
+    backgroundColor: "rgba(255,255,255,0.34)",
   },
   mapSheetPeekBody: {
     paddingHorizontal: 16,
@@ -3494,9 +3623,9 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 19,
     paddingHorizontal: 12,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    borderColor: "rgba(255,255,255,0.24)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -3516,8 +3645,8 @@ const styles = StyleSheet.create({
   mapExpandedCard: {
     gap: 10,
     paddingVertical: 16,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: "rgba(255,255,255,0.2)",
   },
   mapExpandedSpotList: {
     gap: 10,
@@ -3542,15 +3671,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   mapDayChip: {
-    minWidth: 132,
+    minWidth: 156,
   },
   mapSheetButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    borderColor: "rgba(255,255,255,0.24)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -3568,9 +3697,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.1)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(255,255,255,0.22)",
   },
   mapSheetMoreTagText: {
     color: palette.subText,
@@ -3605,6 +3734,23 @@ const styles = StyleSheet.create({
     gap: 8,
     flexShrink: 0,
     paddingTop: 2,
+    alignItems: "center",
+  },
+  mapSearchButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  mapSearchButtonText: {
+    color: palette.text,
+    fontSize: 12,
+    fontWeight: "700",
   },
   smallIconButton: {
     width: 36,
@@ -3615,6 +3761,22 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  headerActionButton: {
+    minHeight: 36,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  headerActionButtonText: {
+    color: palette.text,
+    fontSize: 12,
+    fontWeight: "700",
   },
   searchPanel: {
     padding: 10,
@@ -3632,6 +3794,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
+    minWidth: 0,
     color: palette.text,
     fontSize: 15,
     paddingVertical: 0,
@@ -3782,6 +3945,10 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 2,
   },
+  featureCompactHeader: {
+    gap: 8,
+    minWidth: 0,
+  },
   featureImage: {
     width: "100%",
     height: 156,
@@ -3795,10 +3962,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
+  featureSourceBadge: {
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,183,107,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,183,107,0.22)",
+  },
+  featureSourceBadgeText: {
+    color: palette.gold,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
   featureTitle: {
     color: palette.text,
     fontSize: 17,
     fontWeight: "700",
+  },
+  featureTitleTight: {
+    lineHeight: 24,
   },
   tagRow: {
     flexDirection: "row",
@@ -4110,14 +4296,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    borderColor: "rgba(255,255,255,0.24)",
     overflow: "visible",
-    backgroundColor: "rgba(13, 28, 46, 0.56)",
+    backgroundColor: "rgba(17, 33, 53, 0.38)",
     shadowColor: "#000",
-    shadowOpacity: 0.22,
-    shadowRadius: 20,
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
     shadowOffset: { width: 0, height: 10 },
     elevation: 16,
+  },
+  tabBarGlass: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    opacity: 0.95,
   },
   tabButton: {
     alignItems: "center",
@@ -4167,7 +4358,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    borderColor: "rgba(255,255,255,0.24)",
     shadowColor: "#000",
     shadowOpacity: 0.28,
     shadowRadius: 16,
@@ -4175,7 +4366,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   mapTabFloatingButtonIdle: {
-    backgroundColor: "rgba(15, 31, 49, 0.72)",
+    backgroundColor: "rgba(20, 38, 60, 0.46)",
   },
   mapTabFloatingLabel: {
     color: palette.subText,

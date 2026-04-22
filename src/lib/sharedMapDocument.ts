@@ -58,6 +58,12 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
       .hongkong-marker-shell {
         background: transparent;
         border: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        touch-action: manipulation;
       }
 
       .hongkong-route-marker {
@@ -301,7 +307,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
 
       data.routeSpots.forEach((spot, index) => {
         const marker = L.marker(spot.coords, {
-          icon: makeDivIcon('<div class="hongkong-route-marker">' + (index + 1) + '</div>', [28, 28], [14, 14]),
+          icon: makeDivIcon('<div class="hongkong-route-marker">' + (index + 1) + '</div>', [38, 38], [19, 19]),
         })
           .addTo(map)
           .on("click", () => {
@@ -314,7 +320,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
 
       data.extraSpots.forEach((spot) => {
         const marker = L.marker(spot.coords, {
-          icon: makeDivIcon('<div class="hongkong-extra-marker"></div>', [14, 14], [7, 7]),
+          icon: makeDivIcon('<div class="hongkong-extra-marker"></div>', [22, 22], [11, 11]),
         })
           .addTo(map)
           .on("click", () => {
@@ -327,7 +333,7 @@ export function buildSharedMapDocument(config: SharedMapConfig) {
 
       data.citySpots.forEach((spot) => {
         const marker = L.marker(spot.coords, {
-          icon: makeDivIcon('<div class="hongkong-city-marker"></div>', [12, 12], [6, 6]),
+          icon: makeDivIcon('<div class="hongkong-city-marker"></div>', [20, 20], [10, 10]),
         })
           .addTo(map)
           .on("click", () => {
